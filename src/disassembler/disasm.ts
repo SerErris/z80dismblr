@@ -11,6 +11,8 @@ import {SubroutineStatistics} from './statistics';
 import {EventEmitter} from 'events';
 import {Format} from './format';
 import {readFileSync} from 'fs';
+import {CPC_RST, analyzeCpcRst, formatCpcRst} from './cpcRst';
+import {DiscoveredEntry} from './argsWriter';
 
 
 
@@ -116,6 +118,12 @@ export class Disassembler extends EventEmitter {
 	/// This is a hardwired RST. It does not exist in ROM.
 	/// RST addresses that appear in this list will not be followed/disassembled.
 	public rstDontFollowAddresses = new Array<number>();
+
+	/// Amstrad CPC mode: treat RST opcodes as extended CPC firmware calls.
+	public cpcMode = false;
+
+	/// Entries discovered during CPC mode disassembly (for --argsout).
+	public discovered = new Array<DiscoveredEntry>();
 
 	/// An array that either contains label names or addresses,
 	/// but both as string. If defined only the labels inside this
@@ -447,6 +455,34 @@ export class Disassembler extends EventEmitter {
 
 
 	/**
+	 * Checks whether the given address range falls within assigned memory.
+	 */
+	private isInRange(addr: number, len: number): boolean {
+		for (let i = 0; i < len; i++) {
+			if (!(this.memory.getAttributeAt(addr + i) & MemAttribute.ASSIGNED))
+				return false;
+		}
+		return true;
+	}
+
+
+	/**
+	 * Adds a data label to the symbol table without enqueuing for CFG analysis.
+	 */
+	public addDataLabel(addr: number, name?: string) {
+		this.setLabel(addr, name, NumberType.DATA_LBL);
+	}
+
+
+	/**
+	 * Marks an address range as data (not code).
+	 */
+	public addDataRange(addr: number, len: number) {
+		this.memory.addAttributeAt(addr, len, MemAttribute.DATA);
+	}
+
+
+	/**
 	 * Sets a new address queue.
 	 * @param queue The new queue.
 	 */
@@ -612,6 +648,53 @@ export class Disassembler extends EventEmitter {
 					if (!this.no_warning_disassemble_unassigned_memory)
 						this.emit('warning', 'Trying to disassemble unassigned memory area at 0x' + address.toString(16) + '.');
 					break;
+				}
+
+				// CPC RST intercept: handle extended RST opcodes in CPC mode
+				if (this.cpcMode) {
+					const rawByte = this.memory.getValueAt(address);
+					const rstInfo = CPC_RST.get(rawByte);
+					if (rstInfo) {
+						// Mark memory as code
+						this.memory.addAttributeAt(address, 1, MemAttribute.CODE_FIRST);
+						this.memory.addAttributeAt(address, rstInfo.size, MemAttribute.CODE);
+
+						// Analyse CFG targets
+						const cfg = analyzeCpcRst(rstInfo, address, this.memory);
+
+						// Inject new labels into symbol table
+						for (const nl of cfg.newLabels) {
+							this.setLabel(nl.addr, nl.name, NumberType.DATA_LBL);
+							if (this.isInRange(nl.addr, 1))
+								this.discovered.push({ kind: 'datalabel', addr: nl.addr, name: nl.name });
+						}
+
+						// Enqueue code targets
+						for (const target of cfg.codeTargets) {
+							const tAttr = this.memory.getAttributeAt(target);
+							this.setFoundLabel(target, new Set([address]), NumberType.CODE_SUB, tAttr);
+							if (!(tAttr & MemAttribute.CODE) && (tAttr & MemAttribute.ASSIGNED))
+								this.addressQueue.push(target);
+							if (this.isInRange(target, 1))
+								this.discovered.push({ kind: 'codelabel', addr: target });
+						}
+
+						// Mark data ranges
+						for (const dr of cfg.dataRanges) {
+							this.memory.addAttributeAt(dr.addr, dr.len, MemAttribute.DATA);
+							if (this.isInRange(dr.addr, dr.len))
+								this.discovered.push({ kind: 'datarange', addr: dr.addr, length: dr.len });
+						}
+
+						// Control flow
+						if (cfg.fallThrough) {
+							address = cfg.resumeAddr;
+							continue;
+						}
+						else {
+							break;	// unconditional jump — stop this path
+						}
+					}
 				}
 
 				// Read memory value
@@ -2178,6 +2261,34 @@ export class Disassembler extends EventEmitter {
 				let addAddress;
 				let line;
 				let commentText;
+
+				// CPC RST output intercept
+				if (this.cpcMode && (attr & MemAttribute.CODE)) {
+					const rawByte = this.memory.getValueAt(address);
+					const rstInfo = CPC_RST.get(rawByte);
+					if (rstInfo) {
+						const cpcLines = formatCpcRst(rstInfo, address, this.memory, (a) => {
+							const lbl = this.labels.get(a);
+							return lbl ? lbl.name : undefined;
+						});
+
+						// Emit rst line
+						line = this.formatDisassembly(address, 1, cpcLines.rst);
+						lines.push(line);
+
+						// Emit defw line (for 3-byte RSTs)
+						if (cpcLines.defw !== undefined && cpcLines.defwAddr !== undefined) {
+							const defwLine = this.formatDisassembly(cpcLines.defwAddr, 2, cpcLines.defw);
+							lines.push(defwLine);
+						}
+
+						addAddress = rstInfo.size;
+						prevMemoryAttribute = attr;
+						address += addAddress;
+						continue;
+					}
+				}
+
 				if (attr & MemAttribute.CODE) {
 					// CODE
 

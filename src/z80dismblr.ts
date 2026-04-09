@@ -1,6 +1,7 @@
 import { Disassembler } from './disassembler/disasm';
 import { readFileSync, writeFileSync } from 'fs';
 import { Opcode, Opcodes } from './disassembler/opcode';
+import { writeArgsOut } from './disassembler/argsWriter';
 import * as Path from 'path';
 //import * as assert from 'assert';
 //import { DisLabel } from './disassembler/dislabel';
@@ -30,6 +31,9 @@ class Startup {
 
     /// The labels input path.
     protected static commentsPath: string|undefined;
+
+    /// The auto-generated args output path (--argsout).
+    protected static argsOutFile: string|undefined;
 
     /// The out path for the flow-chart dot file.
     protected static flowChartOutPath: string|undefined;
@@ -82,6 +86,11 @@ class Startup {
 
             // Execute
             this.dasm.disassemble();
+
+            // Write discovered CPC entries
+            if(this.argsOutFile) {
+                writeArgsOut(this.argsOutFile, this.dasm.discovered);
+            }
 
             // Output disassembly
             if(this.outPath) {
@@ -456,6 +465,55 @@ z80dismblr [options]
                 // turn off automatic addresses
                 case '--noautomaticaddr':
                     this.dasm.automaticAddresses = false;
+                    break;
+
+                // Amstrad CPC mode
+                case '--cpc':
+                    this.dasm.cpcMode = true;
+                    break;
+
+                // Data label
+                case '--datalabel':
+                    addressString = args.shift();
+                    addr = this.parseValue(addressString);
+                    if(isNaN(addr)) {
+                        throw arg + ": Not a number: " + addressString;
+                    }
+                    {
+                        // Optional name
+                        let dlName = args.shift();
+                        if(dlName)
+                            if(dlName.startsWith('--')) {
+                                args.unshift(dlName);
+                                dlName = undefined;
+                            }
+                        this.dasm.addDataLabel(addr, dlName);
+                    }
+                    break;
+
+                // Data range
+                case '--datarange':
+                    addressString = args.shift();
+                    addr = this.parseValue(addressString);
+                    if(isNaN(addr)) {
+                        throw arg + ": Not a number: " + addressString;
+                    }
+                    {
+                        const lenString = args.shift();
+                        const len = this.parseValue(lenString);
+                        if(isNaN(len)) {
+                            throw arg + ": Not a number: " + lenString;
+                        }
+                        this.dasm.addDataRange(addr, len);
+                    }
+                    break;
+
+                // Args output file
+                case '--argsout':
+                    this.argsOutFile = args.shift();
+                    if(!this.argsOutFile) {
+                        throw arg + ': No path given.';
+                    }
                     break;
 
                 // set a jump table
