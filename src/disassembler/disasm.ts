@@ -2113,8 +2113,10 @@ export class Disassembler extends EventEmitter {
 			if (!addressPart && !commentPart) {
 				// Comment finished, line empty
 				if (commentAddr != undefined) {
-					// Set comment
-					this.addressComments.set(commentAddr, comment);
+					// Only store comment if it has actual content — empty entries (skeleton
+					// addresses added by --commentsout) must not block auto-generated comments.
+					if (comment.linesBefore || comment.inlineComment || comment.linesAfter)
+						this.addressComments.set(commentAddr, comment);
 					// Set label
 					if (commentLabelName) {
 						this.setLabel(commentAddr, commentLabelName, NumberType.DATA_LBL);	// Data label might be changed to something else.
