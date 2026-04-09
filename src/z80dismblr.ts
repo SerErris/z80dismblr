@@ -339,6 +339,51 @@ z80dismblr [options]
                 It is possible to add several '#n' or '#nn'. E.g. the following is
                 a valid append text: ", code1=#n,word=#n,code2=#n" and would decode the
                 4 byte following the opcode.
+
+    Amstrad CPC mode:
+        The following options enable Amstrad CPC firmware RST handling. In CPC mode
+        the eight RST opcodes (C7, CF, D7, DF, E7, EF, F7, FF) are treated as extended
+        firmware calls rather than plain Z80 restarts. Each RST is followed by an
+        optional 16-bit inline operand that encodes the firmware entry point, ROM bank
+        selection, or a pointer into a firmware jump table.
+
+        RST variants and their inline operand encoding:
+            RST #00 (C7) — RESET:       1 byte, no operand. Unconditional jump.
+            RST #08 (CF) — LOW JUMP:    3 bytes. Operand word: bits 15=LR, 14=UR,
+                                        13..0=target address (0000h–3FFFh).
+            RST #10 (D7) — SIDE CALL:   3 bytes. Operand word: bits 15..14=slot (0–3),
+                                        13..0=offset; effective target = C000h + offset.
+            RST #18 (DF) — FAR CALL:    3 bytes. Operand word is the address of a
+                                        3-byte firmware pointer record:
+                                        [addr+0..1] = target address (little-endian),
+                                        [addr+2]    = ROM select byte
+                                        (0–251 = ROM N, 252–255 = UR/LR on/off flags).
+            RST #20 (E7) — RAM LAM:     1 byte, no operand.
+            RST #28 (EF) — FIRM JUMP:   3 bytes. Operand word is the direct firmware
+                                        jump address (0000h–FFFFh). Unconditional jump.
+            RST #30 (F7) — USER RESTART: 1 byte, no operand.
+            RST #38 (FF) — INTERRUPT:   1 byte, no operand.
+
+        --cpc: Enable Amstrad CPC firmware RST mode. Without this flag the disassembler
+            behaves identically to standard mode and all RST opcodes are treated as
+            plain Z80 restarts.
+
+        --datalabel address [name]: Declare a known data address. The address is added
+            to the symbol table as a data label but is not enqueued for code analysis.
+            The optional name overrides the auto-generated label name.
+            Can be used multiple times.
+            Example: --datalabel 0xBD3F MY_ROUTINE
+
+        --datarange address length: Mark an address range as data so the disassembler
+            will not attempt to decode it as code. 'length' is the size in bytes.
+            Can be used multiple times.
+            Example: --datarange 0x4000 3
+
+        --argsout file: After disassembly, write all labels and data ranges discovered
+            during CPC RST analysis to 'file' in --args format. The output lists
+            codelabels, datalabels, and dataranges found by following RST call chains.
+            Review the file before feeding it back as --args input on a subsequent run.
+            Example: --argsout discovered.args
     `);
     }
 
