@@ -1,4 +1,4 @@
-import * as assert from 'assert';
+import assert = require('assert');
 import { MAX_MEM_SIZE } from '../disassembler/basememory';
 import { Memory } from '../disassembler/memory';
 

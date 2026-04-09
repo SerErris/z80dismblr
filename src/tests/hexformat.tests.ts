@@ -1,4 +1,4 @@
-import * as assert from 'assert';
+import assert = require('assert');
 import { Disassembler } from '../disassembler/disasm';
 import { Format, HexFormat } from '../disassembler/format';
 import { Memory } from '../disassembler/memory';

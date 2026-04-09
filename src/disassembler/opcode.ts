@@ -1,5 +1,5 @@
 import * as util from 'util';
-import * as assert from 'assert';
+import assert = require('assert');
 import {BaseMemory} from './basememory';
 import {Memory, MemAttribute} from './memory';
 import {NumberType} from './numbertype'

@@ -1,4 +1,4 @@
-import * as assert from 'assert';
+import assert = require('assert');
 import { Disassembler } from '../disassembler/disasm';
 import { NumberType } from '../disassembler/numbertype';
 import { writeFileSync } from 'fs';

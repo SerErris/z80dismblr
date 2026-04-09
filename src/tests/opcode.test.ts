@@ -1,4 +1,4 @@
-import * as assert from 'assert';
+import assert = require('assert');
 import { Opcodes, OpcodesCB, OpcodesDD, OpcodesED, OpcodesFD, OpcodesFDCB, OpcodeFlag, OpcodesDDCB } from '../disassembler/opcode';
 import { NumberType } from '../disassembler/numbertype';
 

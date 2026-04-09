@@ -1,5 +1,5 @@
 //import * as util from 'util';
-import * as assert from 'assert';
+import assert = require('assert');
 import {DelayedLog} from './delayedlog';
 import {MAX_MEM_SIZE} from './basememory';
 import {Memory, MemAttribute} from './memory';
@@ -328,7 +328,7 @@ export class Disassembler extends EventEmitter {
 	 */
 	public readBinFile(origin: number, path: string) {
 		const bin = readFileSync(path);
-		this.setMemory(origin, bin);
+		this.setMemory(origin, new Uint8Array(bin));
 	}
 
 	/**
@@ -343,7 +343,7 @@ export class Disassembler extends EventEmitter {
 		const sp = header[23] + 256 * header[24];	// Stackpointer
 		const spIndex = sp - 0x4000;
 		const start = bin[spIndex] + 256 * bin[spIndex + 1];	// Get start address from stack
-		this.setMemory(0x4000, bin);
+		this.setMemory(0x4000, new Uint8Array(bin));
 
 		/* In most cases (snapshot) this is a random address, so it does not make sense to use it as a label:
 		// Set start label

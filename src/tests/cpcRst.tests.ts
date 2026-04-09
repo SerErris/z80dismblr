@@ -1,4 +1,4 @@
-import * as assert from 'assert';
+import assert = require('assert');
 import { Memory } from '../disassembler/memory';
 import { Format, HexFormat } from '../disassembler/format';
 import { CPC_RST, analyzeCpcRst, formatCpcRst } from '../disassembler/cpcRst';
