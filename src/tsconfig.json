@@ -2,6 +2,7 @@
 	"compilerOptions": {
 		"module": "commonjs",
 		"target": "es6",
+		"types": ["mocha", "node"],
 
 		"noImplicitAny": false,
 		"removeComments": false,
