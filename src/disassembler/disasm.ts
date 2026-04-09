@@ -476,6 +476,28 @@ export class Disassembler extends EventEmitter {
 
 
 	/**
+	 * Returns all labeled addresses and their associated comments, sorted by address.
+	 * Merges the labels map and the addressComments map. Used by --commentsout.
+	 */
+	public getFullCommentsData(): import('./argsWriter').CommentEntry[] {
+		const addrs = new Set<number>([...this.labels.keys(), ...this.addressComments.keys()]);
+		return Array.from(addrs)
+			.sort((a, b) => a - b)
+			.map(addr => {
+				const label = this.labels.get(addr);
+				const comment = this.addressComments.get(addr);
+				return {
+					addr,
+					name: label?.name,
+					linesBefore: comment?.linesBefore,
+					inlineComment: comment?.inlineComment,
+					linesAfter: comment?.linesAfter,
+				};
+			});
+	}
+
+
+	/**
 	 * Marks an address range as data (not code).
 	 */
 	public addDataRange(addr: number, len: number) {

@@ -96,7 +96,8 @@ class Startup {
                 writeArgsOut(this.argsOutFile, this.dasm.discovered);
             }
             if(this.commentsOutFile) {
-                writeCommentsOut(this.commentsOutFile, this.dasm.discovered);
+                const dataRanges = this.dasm.discovered.filter(e => e.kind === 'datarange');
+                writeCommentsOut(this.commentsOutFile, this.dasm.getFullCommentsData(), dataRanges);
             }
 
             // Output disassembly
