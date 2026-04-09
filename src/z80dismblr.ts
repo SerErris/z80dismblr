@@ -386,26 +386,17 @@ z80dismblr [options]
     Data annotation:
         The following options annotate known data areas and labels. They work
         independently of --cpc and can be combined with any disassembly mode.
-        When --argsout is used, all entries provided via --datalabel and --datarange
-        as well as any entries discovered automatically (e.g. via --cpc RST analysis)
-        are written to the output file.
-
-        --datalabel address [name]: Declare a known data address. The address is added
-            to the symbol table as a data label but is not enqueued for code analysis.
-            The optional name overrides the auto-generated label name.
-            Can be used multiple times.
-            Example: --datalabel 0xBD3F MY_ROUTINE
 
         --datarange address length: Mark an address range as data so the disassembler
             will not attempt to decode it as code. 'length' is the size in bytes.
             Can be used multiple times.
             Example: --datarange 0x4000 3
 
-        --argsout file: After disassembly, write all known and discovered labels and
-            data ranges to 'file' in --args format. Includes entries from --datalabel
-            and --datarange as well as any entries found automatically during
-            disassembly (e.g. FAR CALL pointer tables in --cpc mode).
-            Review the file before feeding it back as --args input on a subsequent run.
+        --argsout file: After disassembly, write discovered data ranges to 'file'
+            in --args format. Includes entries from --datarange as well as any ranges
+            found automatically during disassembly (e.g. FAR CALL pointer tables in
+            --cpc mode). Review the file before feeding it back as --args input on a
+            subsequent run. Use --commentsout for discovered labels.
             Example: --argsout discovered.args
 
         --commentsout file: After disassembly, write discovered code and data labels
@@ -544,26 +535,6 @@ z80dismblr [options]
                 // Amstrad CPC mode
                 case '--cpc':
                     this.dasm.cpcMode = true;
-                    break;
-
-                // Data label
-                case '--datalabel':
-                    addressString = args.shift();
-                    addr = this.parseValue(addressString);
-                    if(isNaN(addr)) {
-                        throw arg + ": Not a number: " + addressString;
-                    }
-                    {
-                        // Optional name
-                        let dlName = args.shift();
-                        if(dlName)
-                            if(dlName.startsWith('--')) {
-                                args.unshift(dlName);
-                                dlName = undefined;
-                            }
-                        this.dasm.addDataLabel(addr, dlName);
-                        this.dasm.discovered.push({ kind: 'datalabel', addr, name: dlName });
-                    }
                     break;
 
                 // Data range
