@@ -4,6 +4,9 @@
 		"target": "es6",
 		"types": ["mocha", "node"],
 
+		"skipLibCheck": true,
+		"strictPropertyInitialization": false,
+
 		"noImplicitAny": false,
 		"removeComments": false,
 		"noUnusedLocals": true,

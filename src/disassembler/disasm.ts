@@ -122,7 +122,8 @@ export class Disassembler extends EventEmitter {
 	/// Amstrad CPC mode: treat RST opcodes as extended CPC firmware calls.
 	public cpcMode = false;
 
-	/// Entries discovered during CPC mode disassembly (for --argsout).
+	/// Entries collected for --argsout: user-provided --datalabel/--datarange entries
+	/// plus any entries discovered automatically during disassembly (e.g. CPC RST analysis).
 	public discovered = new Array<DiscoveredEntry>();
 
 	/// An array that either contains label names or addresses,

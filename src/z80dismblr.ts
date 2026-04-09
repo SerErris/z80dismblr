@@ -377,6 +377,13 @@ z80dismblr [options]
             behaves identically to standard mode and all RST opcodes are treated as
             plain Z80 restarts.
 
+    Data annotation:
+        The following options annotate known data areas and labels. They work
+        independently of --cpc and can be combined with any disassembly mode.
+        When --argsout is used, all entries provided via --datalabel and --datarange
+        as well as any entries discovered automatically (e.g. via --cpc RST analysis)
+        are written to the output file.
+
         --datalabel address [name]: Declare a known data address. The address is added
             to the symbol table as a data label but is not enqueued for code analysis.
             The optional name overrides the auto-generated label name.
@@ -388,9 +395,10 @@ z80dismblr [options]
             Can be used multiple times.
             Example: --datarange 0x4000 3
 
-        --argsout file: After disassembly, write all labels and data ranges discovered
-            during CPC RST analysis to 'file' in --args format. The output lists
-            codelabels, datalabels, and dataranges found by following RST call chains.
+        --argsout file: After disassembly, write all known and discovered labels and
+            data ranges to 'file' in --args format. Includes entries from --datalabel
+            and --datarange as well as any entries found automatically during
+            disassembly (e.g. FAR CALL pointer tables in --cpc mode).
             Review the file before feeding it back as --args input on a subsequent run.
             Example: --argsout discovered.args
     `);
@@ -542,6 +550,7 @@ z80dismblr [options]
                                 dlName = undefined;
                             }
                         this.dasm.addDataLabel(addr, dlName);
+                        this.dasm.discovered.push({ kind: 'datalabel', addr, name: dlName });
                     }
                     break;
 
@@ -559,6 +568,7 @@ z80dismblr [options]
                             throw arg + ": Not a number: " + lenString;
                         }
                         this.dasm.addDataRange(addr, len);
+                        this.dasm.discovered.push({ kind: 'datarange', addr, length: len });
                     }
                     break;
 
