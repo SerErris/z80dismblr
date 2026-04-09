@@ -476,11 +476,22 @@ export class Disassembler extends EventEmitter {
 
 
 	/**
-	 * Returns all labeled addresses and their associated comments, sorted by address.
-	 * Merges the labels map and the addressComments map. Used by --commentsout.
+	 * Returns one entry per discovered address, sorted by address.
+	 * Covers every instruction start (CODE_FIRST) and every data byte (DATA),
+	 * plus any address that already has a label or comment. This ensures the
+	 * --commentsout file has one entry per disassembly output line so the two
+	 * can be synced address-by-address.
 	 */
 	public getFullCommentsData(): import('./argsWriter').CommentEntry[] {
 		const addrs = new Set<number>([...this.labels.keys(), ...this.addressComments.keys()]);
+
+		// Add every address the disassembler visited: instruction starts and data bytes.
+		for (let addr = 0; addr < MAX_MEM_SIZE; addr++) {
+			const attr = this.memory.getAttributeAt(addr);
+			if (attr & (MemAttribute.CODE_FIRST | MemAttribute.DATA))
+				addrs.add(addr);
+		}
+
 		return Array.from(addrs)
 			.sort((a, b) => a - b)
 			.map(addr => {
