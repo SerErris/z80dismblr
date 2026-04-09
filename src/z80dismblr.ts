@@ -1,7 +1,7 @@
 import { Disassembler } from './disassembler/disasm';
 import { readFileSync, writeFileSync } from 'fs';
 import { Opcode, Opcodes } from './disassembler/opcode';
-import { writeArgsOut } from './disassembler/argsWriter';
+import { writeArgsOut, writeCommentsOut } from './disassembler/argsWriter';
 import { Format, HexFormat } from './disassembler/format';
 import * as Path from 'path';
 //import * as assert from 'assert';
@@ -35,6 +35,9 @@ class Startup {
 
     /// The auto-generated args output path (--argsout).
     protected static argsOutFile: string|undefined;
+
+    /// The auto-generated comments output path (--commentsout).
+    protected static commentsOutFile: string|undefined;
 
     /// The out path for the flow-chart dot file.
     protected static flowChartOutPath: string|undefined;
@@ -91,6 +94,9 @@ class Startup {
             // Write discovered CPC entries
             if(this.argsOutFile) {
                 writeArgsOut(this.argsOutFile, this.dasm.discovered);
+            }
+            if(this.commentsOutFile) {
+                writeCommentsOut(this.commentsOutFile, this.dasm.discovered);
             }
 
             // Output disassembly
@@ -401,6 +407,12 @@ z80dismblr [options]
             disassembly (e.g. FAR CALL pointer tables in --cpc mode).
             Review the file before feeding it back as --args input on a subsequent run.
             Example: --argsout discovered.args
+
+        --commentsout file: After disassembly, write discovered code and data labels
+            to 'file' in --comments format. datarange entries are emitted as
+            commented-out hints since they cannot be expressed in comments format.
+            Review and merge the output into your main --comments file.
+            Example: --commentsout discovered.comments
     `);
     }
 
@@ -576,6 +588,14 @@ z80dismblr [options]
                 case '--argsout':
                     this.argsOutFile = args.shift();
                     if(!this.argsOutFile) {
+                        throw arg + ': No path given.';
+                    }
+                    break;
+
+                // Comments output file
+                case '--commentsout':
+                    this.commentsOutFile = args.shift();
+                    if(!this.commentsOutFile) {
                         throw arg + ': No path given.';
                     }
                     break;
