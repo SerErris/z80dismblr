@@ -604,7 +604,7 @@ export class Disassembler extends EventEmitter {
 					firstLabel = false;
 				}
 				// "Disassemble"
-				const statement = Format.addSpaces(label.name + ':', this.clmnsBytes - 1) + ' ' + this.rightCase('EQU ') + Format.fillDigits(Format.getHexString(address, 4), ' ', 5) + 'h';
+				const statement = Format.addSpaces(label.name + ':', this.clmnsBytes - 1) + ' ' + this.rightCase('EQU ') + Format.formatHex(address, 4);
 				// Comment
 				const comment = this.addressComments.get(address);
 				const commentLines = Comment.getLines(comment, statement, this.disableCommentsInDisassembly);
@@ -1956,7 +1956,7 @@ export class Disassembler extends EventEmitter {
 					for (const ref of addrLabel.references) {
 						if (!first)
 							line2 += ', ';
-						const s = Format.getHexString(ref, 4) + 'h';
+						const s = Format.formatHex(ref, 4);
 						const parent = this.addressParents[ref];
 						if (parent) {
 							let parName;
@@ -2015,7 +2015,7 @@ export class Disassembler extends EventEmitter {
 					if (refCount > 0) {
 						// Second line: The references
 						const refArray = [...addrLabel.references].map(addr => {
-							let s = Format.getHexString(addr, 4) + 'h';
+							let s = Format.formatHex(addr, 4);
 							const parentLabel = this.addressParents[addr];
 							if (parentLabel) {
 								// Add e.g. start of subroutine
@@ -2191,7 +2191,7 @@ export class Disassembler extends EventEmitter {
 				// First line
 				// Print "ORG"
 				this.addEmptyLines(lines);
-				let orgLine = ' '.repeat(this.clmnsBytes) + this.rightCase('ORG ') + Format.getHexString(addr) + 'h';
+				let orgLine = ' '.repeat(this.clmnsBytes) + this.rightCase('ORG ') + Format.formatHex(addr, 4);
 				if (!this.disableCommentsInDisassembly)
 					orgLine += '; ' + Format.getConversionForAddress(addr);
 				lines.push(orgLine);
@@ -2204,7 +2204,7 @@ export class Disassembler extends EventEmitter {
 
 				// Print new "ORG"
 				this.addEmptyLines(lines);
-				let orgLine = ' '.repeat(this.clmnsBytes) + this.rightCase('ORG ') + Format.getHexString(addr) + 'h';
+				let orgLine = ' '.repeat(this.clmnsBytes) + this.rightCase('ORG ') + Format.formatHex(addr, 4);
 				if (!this.disableCommentsInDisassembly)
 					orgLine += '; ' + Format.getConversionForAddress(addr);
 				lines.push(orgLine);
@@ -2314,7 +2314,7 @@ export class Disassembler extends EventEmitter {
 					let memValue = this.memory.getValueAt(address);
 
 					// Disassemble the data line
-					let mainString = this.rightCase('DEFB ') + Format.getHexString(memValue, 2) + 'h';
+					let mainString = this.rightCase('DEFB ') + Format.formatHex(memValue, 2);
 					commentText = Format.getVariousConversionsForByte(memValue);
 					line = this.formatDisassembly(address, 1, mainString);
 

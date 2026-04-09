@@ -2,10 +2,44 @@ import * as assert from 'assert';
 import {BaseMemory} from './basememory';
 
 
+/// Output style for hexadecimal literals everywhere in the disassembly.
+export const enum HexFormat {
+	INTEL,   // nnnn h  — e.g. 1234h  (default, no leading zero for address column)
+	INTEL0,  // 0nnnnh  — e.g. 01234h (leading zero, avoids label ambiguity)
+	CPC,     // #nnnn   — e.g. #1234  (Amstrad CPC / sjasmplus native)
+	Z80,     // $nnnn   — e.g. $1234  (Zilog / sjasmplus dollar prefix)
+	C,       // 0xnnnn  — e.g. 0x1234 (C style, readable but not always reassemblable)
+}
+
+
 export class Format {
 
 	/// Choose opcodes in lower or upper case.
 	public static hexNumbersLowerCase = false;
+
+	/// Hex output style for assembler operands and comments.
+	public static hexFormat: HexFormat = HexFormat.INTEL;
+
+
+	/**
+	 * Formats a number as a hex literal in the currently selected style.
+	 * @param value The value to format.
+	 * @param digits Minimum number of hex digits (zero-padded).
+	 * @returns e.g. "1234h", "#1234", "$1234", "0x1234", "01234h"
+	 */
+	public static formatHex(value: number, digits = 4): string {
+		let s = value.toString(16);
+		if (!Format.hexNumbersLowerCase)
+			s = s.toUpperCase();
+		s = Format.fillDigits(s, '0', digits);
+		switch (Format.hexFormat) {
+			case HexFormat.CPC:    return '#' + s;
+			case HexFormat.Z80:    return '$' + s;
+			case HexFormat.C:      return '0x' + s;
+			case HexFormat.INTEL0: return '0' + s + 'h';
+			default:               return s + 'h';   // INTEL
+		}
+	}
 
 	/**
 	 * Returns a hex string with a fixed number of digits.
@@ -83,10 +117,7 @@ export class Format {
 	 * @returns A string with hex conversion, e.g. "FA20h"
 	 */
 	public static getConversionForAddress(value: number): string {
-		// word
-		let result = Format.getHexString(value) + 'h';
-		// return
-		return result;
+		return Format.formatHex(value, 4);
 	}
 
 

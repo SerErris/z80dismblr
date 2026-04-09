@@ -2,6 +2,7 @@ import { Disassembler } from './disassembler/disasm';
 import { readFileSync, writeFileSync } from 'fs';
 import { Opcode, Opcodes } from './disassembler/opcode';
 import { writeArgsOut } from './disassembler/argsWriter';
+import { Format, HexFormat } from './disassembler/format';
 import * as Path from 'path';
 //import * as assert from 'assert';
 //import { DisLabel } from './disassembler/dislabel';
@@ -256,6 +257,14 @@ z80dismblr [options]
         --clmnsopcodetotal value: The size of the complete opcode, e.g. 'LD  A,(HL)'.
         --uppercase: Use upper case for the opcodes, e.g. 'ld a,(hl)'.
         --addbytes: Print also the byte values of the opcodes (the opcode bytes).
+        --hexformat style: Select the output style for all hex literals in the
+            disassembly (operands, directives, comments). Default is 'intel'.
+            Styles:
+                intel  — trailing h, e.g.  1234h  (default)
+                intel0 — trailing h with leading zero, e.g.  01234h
+                cpc    — hash prefix, e.g.  #1234  (Amstrad CPC / sjasmplus)
+                z80    — dollar prefix, e.g.  $1234  (Zilog / sjasmplus)
+                c      — 0x prefix, e.g.  0x1234  (C style)
 
         Dot options:
         --callgraphout file: Output a dot file. This file can be used for visualization
@@ -703,6 +712,22 @@ z80dismblr [options]
                 // Use upper case for opcodes
                 case '--uppercase':
                     this.dasm.opcodesLowerCase = false;
+                    break;
+
+                // Hex output format
+                case '--hexformat':
+                    {
+                        const fmt = args.shift();
+                        switch (fmt) {
+                            case 'intel':  Format.hexFormat = HexFormat.INTEL;  break;
+                            case 'intel0': Format.hexFormat = HexFormat.INTEL0; break;
+                            case 'cpc':    Format.hexFormat = HexFormat.CPC;    break;
+                            case 'z80':    Format.hexFormat = HexFormat.Z80;    break;
+                            case 'c':      Format.hexFormat = HexFormat.C;      break;
+                            default:
+                                throw arg + ": Unknown hex format '" + fmt + "'. Use intel, intel0, cpc, z80 or c.";
+                        }
+                    }
                     break;
 
                 // print also ocode byte values

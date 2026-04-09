@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import { Memory } from '../disassembler/memory';
+import { Format, HexFormat } from '../disassembler/format';
 import { CPC_RST, analyzeCpcRst, formatCpcRst } from '../disassembler/cpcRst';
 
 
@@ -124,6 +125,11 @@ suite('CPC RST', () => {
 
 	suite('formatCpcRst', () => {
 
+		// Run all formatCpcRst tests with CPC hex style (#nnnn) so operand and
+		// comment addresses are consistently formatted as #XXXX.
+		setup(() => { Format.hexFormat = HexFormat.CPC; });
+		teardown(() => { Format.hexFormat = HexFormat.INTEL; });
+
 		test('RST 0 RESET — rst line only, no defw', () => {
 			const info = CPC_RST.get(0xC7)!;
 			const mem = makeMemory(0x1000, [0xC7]);
@@ -139,7 +145,7 @@ suite('CPC RST', () => {
 			const mem = makeMemory(0x1000, [0xCF, 0x34, 0x01]);
 			const lines = formatCpcRst(info, 0x1000, mem);
 			assert.equal(lines.rst, 'rst #08\t\t\t; LOW JUMP');
-			assert.equal(lines.defw, 'defw 00134h\t\t;   to #0134 [LR=0, UR=0]');
+			assert.equal(lines.defw, 'defw #0134\t\t;   to #0134 [LR=0, UR=0]');
 			assert.equal(lines.rstAddr, 0x1000);
 			assert.equal(lines.defwAddr, 0x1001);
 		});
@@ -151,7 +157,7 @@ suite('CPC RST', () => {
 			const mem = makeMemory(0x1000, [0xCF, 0x34, 0x41]);
 			const lines = formatCpcRst(info, 0x1000, mem);
 			assert.equal(lines.rst, 'rst #08\t\t\t; LOW JUMP');
-			assert.equal(lines.defw, 'defw 04134h\t\t;   to #0134 [LR=0, UR=1]');
+			assert.equal(lines.defw, 'defw #4134\t\t;   to #0134 [LR=0, UR=1]');
 			assert.equal(lines.rstAddr, 0x1000);
 			assert.equal(lines.defwAddr, 0x1001);
 		});
@@ -163,7 +169,7 @@ suite('CPC RST', () => {
 			const mem = makeMemory(0x1000, [0xCF, 0x34, 0x81]);
 			const lines = formatCpcRst(info, 0x1000, mem);
 			assert.equal(lines.rst, 'rst #08\t\t\t; LOW JUMP');
-			assert.equal(lines.defw, 'defw 08134h\t\t;   to #0134 [LR=1, UR=0]');
+			assert.equal(lines.defw, 'defw #8134\t\t;   to #0134 [LR=1, UR=0]');
 			assert.equal(lines.rstAddr, 0x1000);
 			assert.equal(lines.defwAddr, 0x1001);
 		});
@@ -175,7 +181,7 @@ suite('CPC RST', () => {
 			const mem = makeMemory(0x1000, [0xCF, 0x34, 0xC1]);
 			const lines = formatCpcRst(info, 0x1000, mem);
 			assert.equal(lines.rst, 'rst #08\t\t\t; LOW JUMP');
-			assert.equal(lines.defw, 'defw 0C134h\t\t;   to #0134 [LR=1, UR=1]');
+			assert.equal(lines.defw, 'defw #C134\t\t;   to #0134 [LR=1, UR=1]');
 			assert.equal(lines.rstAddr, 0x1000);
 			assert.equal(lines.defwAddr, 0x1001);
 		});
@@ -187,7 +193,7 @@ suite('CPC RST', () => {
 			const mem = makeMemory(0x1000, [0xD7, 0x00, 0x04]);
 			const lines = formatCpcRst(info, 0x1000, mem);
 			assert.equal(lines.rst, 'rst #10\t\t\t; SIDE CALL');
-			assert.equal(lines.defw, 'defw 00400h\t\t;   to #C400 [slot 0]');
+			assert.equal(lines.defw, 'defw #0400\t\t;   to #C400 [slot 0]');
 			assert.equal(lines.rstAddr, 0x1000);
 			assert.equal(lines.defwAddr, 0x1001);
 		});
@@ -199,7 +205,7 @@ suite('CPC RST', () => {
 			const mem = makeMemory(0x1000, [0xD7, 0x00, 0x44]);
 			const lines = formatCpcRst(info, 0x1000, mem);
 			assert.equal(lines.rst, 'rst #10\t\t\t; SIDE CALL');
-			assert.equal(lines.defw, 'defw 04400h\t\t;   to #C400 [slot 1]');
+			assert.equal(lines.defw, 'defw #4400\t\t;   to #C400 [slot 1]');
 			assert.equal(lines.rstAddr, 0x1000);
 			assert.equal(lines.defwAddr, 0x1001);
 		});
@@ -211,7 +217,7 @@ suite('CPC RST', () => {
 			const mem = makeMemory(0x1000, [0xD7, 0x00, 0x84]);
 			const lines = formatCpcRst(info, 0x1000, mem);
 			assert.equal(lines.rst, 'rst #10\t\t\t; SIDE CALL');
-			assert.equal(lines.defw, 'defw 08400h\t\t;   to #C400 [slot 2]');
+			assert.equal(lines.defw, 'defw #8400\t\t;   to #C400 [slot 2]');
 			assert.equal(lines.rstAddr, 0x1000);
 			assert.equal(lines.defwAddr, 0x1001);
 		});
@@ -223,7 +229,7 @@ suite('CPC RST', () => {
 			const mem = makeMemory(0x1000, [0xD7, 0x00, 0xC4]);
 			const lines = formatCpcRst(info, 0x1000, mem);
 			assert.equal(lines.rst, 'rst #10\t\t\t; SIDE CALL');
-			assert.equal(lines.defw, 'defw 0C400h\t\t;   to #C400 [slot 3]');
+			assert.equal(lines.defw, 'defw #C400\t\t;   to #C400 [slot 3]');
 			assert.equal(lines.rstAddr, 0x1000);
 			assert.equal(lines.defwAddr, 0x1001);
 		});
@@ -234,7 +240,7 @@ suite('CPC RST', () => {
 			mem.setMemory(0x4000, new Uint8Array([0x3F, 0xBD, 0x07]));
 			const lines = formatCpcRst(info, 0x1000, mem);
 			assert.equal(lines.rst, 'rst #18\t\t\t; FAR CALL');
-			assert.equal(lines.defw, 'defw FAR_4000\t\t;   to #BD3F [ROM 7]');
+			assert.equal(lines.defw, 'defw FAR_4000\t\t;   to #BD3F [ROM 7]');  // target via cpcAddr → #XXXX
 			assert.equal(lines.rstAddr, 0x1000);
 			assert.equal(lines.defwAddr, 0x1001);
 		});
@@ -267,7 +273,7 @@ suite('CPC RST', () => {
 			const mem = makeMemory(0x1000, [0xEF, 0x00, 0x01]);
 			const lines = formatCpcRst(info, 0x1000, mem);
 			assert.equal(lines.rst, 'rst #28\t\t\t; FIRM JUMP');
-			assert.equal(lines.defw, 'defw 00100h\t\t;   to #0100');
+			assert.equal(lines.defw, 'defw #0100\t\t;   to #0100');
 			assert.equal(lines.rstAddr, 0x1000);
 			assert.equal(lines.defwAddr, 0x1001);
 		});
@@ -280,7 +286,7 @@ suite('CPC RST', () => {
 				return undefined;
 			});
 			assert.equal(lines.rst, 'rst #28\t\t\t; FIRM JUMP');
-			assert.equal(lines.defw, 'defw MAIN\t\t;   to #0100');
+			assert.equal(lines.defw, 'defw MAIN\t\t;   to #0100');  // operand is label, comment is cpcAddr → #XXXX
 		});
 
 		// ── rst comment line coverage for all 8 variants ──────────────────────

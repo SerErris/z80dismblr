@@ -1,4 +1,5 @@
 import {Memory, MemAttribute} from './memory';
+import {Format} from './format';
 
 
 // ── Enums & interfaces ──────────────────────────────────────────────────────
@@ -66,15 +67,14 @@ export const CPC_RST: ReadonlyMap<number, CpcRstInfo> = new Map<number, CpcRstIn
 
 // ── Private helpers ─────────────────────────────────────────────────────────
 
-/** Formats a 16-bit value as "0XXXXh" (uppercase, leading zero, trailing h). */
+/** Formats a 16-bit value using the currently selected hex output style. */
 function hex16(n: number): string {
-    const s = n.toString(16).toUpperCase().padStart(4, '0');
-    return '0' + s + 'h';
+    return Format.formatHex(n, 4);
 }
 
-/** Formats a 16-bit address as "#XXXX" (uppercase, 4 hex digits). */
+/** Formats a 16-bit address using the currently selected hex output style. */
 function cpcAddr(n: number): string {
-    return '#' + n.toString(16).toUpperCase().padStart(4, '0');
+    return Format.formatHex(n, 4);
 }
 
 /**
@@ -150,7 +150,7 @@ export function analyzeCpcRst(info: CpcRstInfo, pc: number, mem: Memory): CpcRst
             //   [ptrAddr+0..1] = target address (little-endian)
             //   [ptrAddr+2]    = ROM select byte
             const ptrAddr = raw;
-            const labelName = 'FAR_' + ptrAddr.toString(16).toUpperCase().padStart(4, '0');
+            const labelName = 'FAR_' + Format.fillDigits(ptrAddr.toString(16).toUpperCase(), '0', 4);
             cfg.newLabels.push({ addr: ptrAddr, name: labelName });
             cfg.dataRanges.push({ addr: ptrAddr, len: 3 });
             const farLo = readWord(mem, ptrAddr);
@@ -226,7 +226,7 @@ export function formatCpcRst(
 
         case CpcRstKind.FAR_CALL: {
             const ptrAddr = raw;
-            const genLabel = 'FAR_' + ptrAddr.toString(16).toUpperCase().padStart(4, '0');
+            const genLabel = 'FAR_' + Format.fillDigits(ptrAddr.toString(16).toUpperCase(), '0', 4);
             const operand = (lookupLabel && lookupLabel(ptrAddr)) ?? genLabel;
 
             const farTarget = readWord(mem, ptrAddr);
