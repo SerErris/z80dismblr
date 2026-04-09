@@ -77,7 +77,6 @@ export function writeCommentsOut(path: string, comments: CommentEntry[], dataRan
 	lines.push('; Review and use as --comments input');
 
 	for (const entry of comments) {
-		lines.push('');
 		if (entry.linesBefore)
 			for (const l of entry.linesBefore)
 				lines.push(l);
@@ -88,6 +87,7 @@ export function writeCommentsOut(path: string, comments: CommentEntry[], dataRan
 		if (entry.linesAfter)
 			for (const l of entry.linesAfter)
 				lines.push(l);
+		lines.push('');	// blank line terminates each entry
 	}
 
 	// datarange entries have no equivalent in comments format — emit as reminders
