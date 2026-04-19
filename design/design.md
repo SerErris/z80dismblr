@@ -6,7 +6,7 @@
 ┌──────────────────────────────────────────────────────────────────────┐
 │                           Disassembler                               │
 │                                                                      │
-│  memory    labels         addressComments    addressStructured        │
+│  memory    labels         addressComments    addressStructured       │
 │  Map<addr,DisLabel>       Map<addr,Comment>  Map<addr,StructFields>  │
 └──────────────────────────────────────────────────────────────────────┘
         │           │                │
@@ -15,7 +15,7 @@
   │  Memory  │ │ DisLabel │  │  Comment   │  │ CleanEmitter │
   │          │ │          │  │            │  │  (Stream B)  │
   │ data[]   │ │ name     │  │linesBefore │  └──────────────┘
-  │ attrib[] │ │ type     │  │inlineComment    ┌──────────┐
+  │ attrib[] │ │ type     │  │inlineComment  ┌──────────┐
   └──────────┘ │ isEqu    │  │linesAfter  │  │  CPC_RST │
                │ isFixed  │  └────────────┘  │ (--cpc)  │
   ┌──────────┐ │ refs     │                  └──────────┘
