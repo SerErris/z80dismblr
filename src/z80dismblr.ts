@@ -1,7 +1,7 @@
 import { Disassembler } from './disassembler/disasm';
 import { readFileSync, writeFileSync } from 'fs';
 import { Opcode, Opcodes } from './disassembler/opcode';
-import { writeArgsOut, writeCommentsOut } from './disassembler/argsWriter';
+import { writeArgsOut, writeSymbolsOut } from './disassembler/argsWriter';
 import { Format, HexFormat } from './disassembler/format';
 import * as Path from 'path';
 //import * as assert from 'assert';
@@ -97,17 +97,10 @@ class Startup {
             // Write output files
             const discoveredDataRanges = this.dasm.discovered.filter(e => e.kind === 'datarange');
             if(this.argsOutFile) {
-                // Replace --comments with the commentsout path so the next run picks up
-                // the enriched comments file automatically.
-                const argsForNextRun = this.commentsOutFile
-                    ? this.stableArgs.map(a => a.startsWith('--comments ')
-                        ? '--comments ' + this.commentsOutFile
-                        : a)
-                    : this.stableArgs;
-                writeArgsOut(this.argsOutFile, argsForNextRun, discoveredDataRanges);
+                writeArgsOut(this.argsOutFile, this.stableArgs, discoveredDataRanges);
             }
             if(this.commentsOutFile) {
-                writeCommentsOut(this.commentsOutFile, this.dasm.getFullCommentsData(), discoveredDataRanges);
+                writeSymbolsOut(this.commentsOutFile, this.dasm.getSymbolsData());
             }
 
             // Output disassembly

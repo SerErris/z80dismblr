@@ -499,29 +499,27 @@ export class Disassembler extends EventEmitter {
 	 * --commentsout file has one entry per disassembly output line so the two
 	 * can be synced address-by-address.
 	 */
-	public getFullCommentsData(): import('./argsWriter').CommentEntry[] {
-		const addrs = new Set<number>([...this.labels.keys(), ...this.addressComments.keys()]);
-
-		// Add every address the disassembler visited: instruction starts and data bytes.
-		for (let addr = 0; addr < MAX_MEM_SIZE; addr++) {
-			const attr = this.memory.getAttributeAt(addr);
-			if (attr & (MemAttribute.CODE_FIRST | MemAttribute.DATA))
-				addrs.add(addr);
-		}
-
-		return Array.from(addrs)
-			.sort((a, b) => a - b)
-			.map(addr => {
-				const label = this.labels.get(addr);
-				const comment = this.addressComments.get(addr);
-				return {
-					addr,
-					name: label?.name,
-					linesBefore: comment?.linesBefore,
-					inlineComment: comment?.inlineComment,
-					linesAfter: comment?.linesAfter,
-				};
-			});
+	/**
+	 * Returns all named labels for --symbolsout.
+	 * Only entries with a label name are included; nameless addresses,
+	 * auto-generated comments, and prose are all excluded.
+	 */
+	public getSymbolsData(): import('./argsWriter').SymbolEntry[] {
+		return Array.from(this.labels.entries())
+			.filter(([, label]) =>
+				label.name !== undefined &&
+				(label.type === NumberType.CODE_SUB ||
+				 label.type === NumberType.CODE_RST ||
+				 label.type === NumberType.CODE_LBL ||
+				 label.type === NumberType.DATA_LBL) &&
+				!label.isEqu)
+			.sort(([a], [b]) => a - b)
+			.map(([addr, label]) => ({
+				addr,
+				name: label.name,
+				isSub: label.type === NumberType.CODE_SUB ||
+				       label.type === NumberType.CODE_RST,
+			}));
 	}
 
 
