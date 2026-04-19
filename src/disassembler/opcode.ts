@@ -4,6 +4,7 @@ import {BaseMemory} from './basememory';
 import {Memory, MemAttribute} from './memory';
 import {NumberType} from './numbertype'
 import {Format} from './format';
+import {Z80Register} from './registerAnalysis';
 
 
 /// Classifies opcodes.
@@ -47,6 +48,14 @@ export class Opcode {
 
 	/// For custom opcodes further bytes to decode can be added.
 	public appendValueTypes: Array<NumberType>;
+
+	/// Registers written (clobbered) by this opcode. Populated by
+	/// initializeRegisterEffects() at module load. undefined until then.
+	public writes?: ReadonlySet<Z80Register>;
+
+	/// Registers read (consumed) by this opcode. Populated by
+	/// initializeRegisterEffects() at module load. undefined until then.
+	public reads?: ReadonlySet<Z80Register>;
 
 
 	/**
@@ -2340,3 +2349,283 @@ export const Opcodes: Array<Opcode> = [
 	new Opcode(0xFF, "RST %s")
 ];
 
+
+// ─── Register-effect masks (§8.3) ──────────────────────────────────────────
+//
+// Runs once at module load. Every Opcode entry in every table receives a
+// `writes` and `reads` Set<Z80Register> so the register-usage analyser
+// (analyzeRegisterUsage in disasm.ts) can derive Corrupted / Preserved lists.
+//
+// Strategy: start by assigning empty sets to every entry (safe default), then
+// overwrite with accurate values derived from the mnemonic string.
+
+(function initializeRegisterEffects() {
+
+	// ── helpers ──────────────────────────────────────────────────────────────
+
+	type R = Z80Register;
+
+	// Map mnemonic register tokens to the 8-bit names we track.
+	const REGS: Record<string, R[]> = {
+		'A': ['A'], 'B': ['B'], 'C': ['C'], 'D': ['D'], 'E': ['E'],
+		'H': ['H'], 'L': ['L'], 'F': ['F'], 'I': ['I'], 'R': ['R'],
+		'SP': ['SP'],
+		'AF': ['A', 'F'], 'BC': ['B', 'C'], 'DE': ['D', 'E'], 'HL': ['H', 'L'],
+		'IX': ['IXH', 'IXL'], 'IY': ['IYH', 'IYL'],
+		'IXH': ['IXH'], 'IXL': ['IXL'], 'IYH': ['IYH'], 'IYL': ['IYL'],
+	};
+
+	function parseOperand(token: string): {regs: R[]; indirect: boolean} {
+		const t = token.trim();
+		if (t.startsWith('(') && t.endsWith(')')) {
+			const inner = t.slice(1, -1).replace(/[+-].+$/, '').trim();
+			return {regs: REGS[inner] ?? [], indirect: true};
+		}
+		return {regs: REGS[t] ?? [], indirect: false};
+	}
+
+	function add(set: Set<R>, regs: R[]) { regs.forEach(r => set.add(r)); }
+
+	// Derive writes/reads from a stored mnemonic string.
+	function derive(name: string): {w: Set<R>; r: Set<R>} {
+		const w = new Set<R>();
+		const r = new Set<R>();
+
+		const upper = name.replace(/%s/g, 'N').toUpperCase();
+		const sp = upper.indexOf(' ');
+		const op = sp < 0 ? upper : upper.slice(0, sp);
+		const rest = sp < 0 ? '' : upper.slice(sp + 1);
+		const parts = rest.split(',').map(s => s.trim()).filter(Boolean);
+
+		switch (op) {
+			case 'NOP': case 'HALT': case 'DI': case 'EI': case 'IM':
+				break;
+
+			case 'LD': {
+				if (parts.length < 1) break;
+				const dst = parseOperand(parts[0]);
+				const src = parseOperand(parts[1] ?? '');
+				// Source: direct regs are read; indirect base regs are read
+				add(r, src.regs);
+				// Destination: indirect base regs are read (address calc); direct regs are written
+				if (dst.indirect)   add(r, dst.regs);
+				else                add(w, dst.regs);
+				// LD A,I / LD A,R also sets flags
+				if (parts[0] === 'A' && (parts[1] === 'I' || parts[1] === 'R')) w.add('F');
+				break;
+			}
+
+			case 'ADD': case 'ADC': {
+				if (parts.length >= 2) {
+					const dst = parseOperand(parts[0]);
+					const src = parseOperand(parts[1]);
+					add(w, dst.regs); w.add('F');
+					add(r, dst.regs); add(r, src.regs);
+					if (op === 'ADC') r.add('F');
+				}
+				break;
+			}
+
+			case 'SUB': case 'AND': case 'OR': case 'XOR': {
+				w.add('A'); w.add('F'); r.add('A');
+				if (parts.length >= 1) add(r, parseOperand(parts[0]).regs);
+				break;
+			}
+
+			case 'SBC': {
+				if (parts.length >= 2) {
+					const dst = parseOperand(parts[0]);
+					const src = parseOperand(parts[1]);
+					add(w, dst.regs); w.add('F');
+					add(r, dst.regs); add(r, src.regs); r.add('F');
+				}
+				break;
+			}
+
+			case 'CP': {
+				w.add('F'); r.add('A');
+				if (parts.length >= 1) add(r, parseOperand(parts[0]).regs);
+				break;
+			}
+
+			case 'INC': case 'DEC': {
+				if (parts.length >= 1) {
+					const tok = parseOperand(parts[0]);
+					if (tok.indirect) {
+						add(r, tok.regs); w.add('F');
+					} else {
+						add(w, tok.regs); add(r, tok.regs);
+						if (tok.regs.length === 1) w.add('F'); // 8-bit only
+					}
+				}
+				break;
+			}
+
+			case 'PUSH': {
+				if (parts.length >= 1) add(r, parseOperand(parts[0]).regs);
+				r.add('SP'); w.add('SP');
+				break;
+			}
+
+			case 'POP': {
+				if (parts.length >= 1) add(w, parseOperand(parts[0]).regs);
+				r.add('SP'); w.add('SP');
+				break;
+			}
+
+			case 'EX': {
+				if (rest === "AF,AF'") {
+					(['A','F',"A'","F'"] as R[]).forEach(reg => { w.add(reg); r.add(reg); });
+				} else if (rest === 'DE,HL') {
+					(['D','E','H','L'] as R[]).forEach(reg => { w.add(reg); r.add(reg); });
+				} else {
+					// EX (SP),HL / EX (SP),IX / EX (SP),IY
+					r.add('SP');
+					const rhs = parts[1] ?? '';
+					add(r, REGS[rhs] ?? []); add(w, REGS[rhs] ?? []);
+				}
+				break;
+			}
+
+			case 'EXX': {
+				(['B','C','D','E','H','L',"B'","C'","D'","E'","H'","L'"] as R[]).forEach(reg => {
+					w.add(reg); r.add(reg);
+				});
+				break;
+			}
+
+			case 'RLCA': case 'RRCA': case 'RLA': case 'RRA': {
+				w.add('A'); w.add('F'); r.add('A');
+				break;
+			}
+
+			case 'DAA': { w.add('A'); w.add('F'); r.add('A'); r.add('F'); break; }
+			case 'CPL': case 'NEG': { w.add('A'); w.add('F'); r.add('A'); break; }
+			case 'SCF': case 'CCF': { w.add('F'); r.add('F'); break; }
+
+			case 'DJNZ': { w.add('B'); r.add('B'); break; }
+
+			case 'JP': {
+				// JP (HL/IX/IY) — indirect jump
+				if (rest.includes('(')) {
+					const inner = rest.replace(/[()]/g, '').replace(/^[A-Z]+,/, '');
+					const base = inner.replace(/[+-].+$/, '');
+					add(r, REGS[base] ?? []);
+				}
+				if (parts.length > 1) r.add('F'); // conditional
+				break;
+			}
+
+			case 'JR': {
+				if (parts.length > 1) r.add('F');
+				break;
+			}
+
+			case 'CALL': {
+				w.add('SP'); r.add('SP');
+				if (parts.length > 1) r.add('F'); // conditional
+				break;
+			}
+
+			case 'RET': case 'RETN': case 'RETI': {
+				w.add('SP'); r.add('SP');
+				if (rest.length > 0) r.add('F'); // conditional
+				break;
+			}
+
+			case 'RST': { w.add('SP'); r.add('SP'); break; }
+
+			case 'RLC': case 'RRC': case 'RL': case 'RR':
+			case 'SLA': case 'SRA': case 'SRL': {
+				if (parts.length >= 1) {
+					const tok = parseOperand(parts[0]);
+					if (tok.indirect) add(r, tok.regs);
+					else { add(w, tok.regs); add(r, tok.regs); }
+					w.add('F');
+				}
+				break;
+			}
+
+			case 'BIT': {
+				w.add('F');
+				if (parts.length >= 2) add(r, parseOperand(parts[1]).regs);
+				break;
+			}
+
+			case 'SET': case 'RES': {
+				if (parts.length >= 2) {
+					const tok = parseOperand(parts[1]);
+					if (tok.indirect) add(r, tok.regs);
+					else { add(w, tok.regs); add(r, tok.regs); }
+				}
+				break;
+			}
+
+			case 'LDI': case 'LDD': case 'LDIR': case 'LDDR': {
+				(['B','C','D','E','H','L'] as R[]).forEach(reg => { w.add(reg); r.add(reg); });
+				w.add('F');
+				break;
+			}
+
+			case 'CPI': case 'CPD': case 'CPIR': case 'CPDR': {
+				(['B','H','L'] as R[]).forEach(reg => { w.add(reg); r.add(reg); });
+				r.add('A'); w.add('F');
+				break;
+			}
+
+			case 'INI': case 'IND': case 'INIR': case 'INDR': {
+				(['B','H','L'] as R[]).forEach(reg => { w.add(reg); r.add(reg); });
+				r.add('C'); w.add('F');
+				break;
+			}
+
+			case 'OUTI': case 'OUTD': case 'OTIR': case 'OTDR': {
+				(['B','H','L'] as R[]).forEach(reg => { w.add(reg); r.add(reg); });
+				r.add('A'); r.add('C'); w.add('F');
+				break;
+			}
+
+			case 'IN': {
+				if (parts.length >= 1) { add(w, parseOperand(parts[0]).regs); w.add('F'); }
+				if (rest.includes('(C)')) { r.add('B'); r.add('C'); }
+				break;
+			}
+
+			case 'OUT': {
+				if (parts.length >= 2) add(r, parseOperand(parts[1]).regs);
+				if (rest.includes('(C)')) { r.add('B'); r.add('C'); }
+				break;
+			}
+
+			default: break;
+		}
+
+		return {w, r};
+	}
+
+	// ── pass 1: assign empty sets to every entry in all tables ───────────────
+	const allTables = [
+		Opcodes, OpcodesCB, OpcodesED,
+		OpcodesDD, OpcodesFD,
+		OpcodesDDCB, OpcodesFDCB,
+	];
+	for (const table of allTables) {
+		for (const op of table) {
+			if (op && !Array.isArray(op)) {
+				(op as any).writes = new Set<R>();
+				(op as any).reads  = new Set<R>();
+			}
+		}
+	}
+
+	// ── pass 2: overwrite with mnemonic-derived values ────────────────────────
+	for (const table of allTables) {
+		for (const op of table) {
+			if (!op || Array.isArray(op)) continue;
+			const {w, r} = derive((op as Opcode).name);
+			(op as any).writes = w;
+			(op as any).reads  = r;
+		}
+	}
+
+})();

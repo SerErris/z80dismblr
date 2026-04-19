@@ -13,6 +13,14 @@ import {Format} from './format';
 import {readFileSync} from 'fs';
 import {CPC_RST, analyzeCpcRst, formatCpcRst} from './cpcRst';
 import {DiscoveredEntry} from './argsWriter';
+import {StructuredFields, Z80Register} from './registerAnalysis';
+import {RegAnalyzer, AnalyserContext} from './reganalyzer';
+import {
+	buildBannerRule,
+	buildBannerMid,
+	collapseRegisterPairs,
+	renderList,
+} from './headerFormatters';
 
 
 
@@ -46,6 +54,12 @@ export class Disassembler extends EventEmitter {
 
 	// Used for (user) comments for labels (addresses).
 	protected addressComments = new Map<number, Comment>();
+
+	/// User-supplied structured fields for the firmware-style header
+	/// (§8.4). Populated by setAddressComments() when it encounters
+	/// summary:/action:/entry:/exit-success:/exit-failure:/corrupted:/
+	/// preserved: markers in the --comments file.
+	protected addressStructured = new Map<number, StructuredFields>();
 
 	/// Map for statistics (size of subroutines, cyclomatic complexity)
 	protected subroutineStatistics = new Map<DisLabel, SubroutineStatistics>();
@@ -280,6 +294,9 @@ export class Disassembler extends EventEmitter {
 
 		// Count statistics (size of subroutines, cyclomatic complexity)
 		this.countStatistics();
+
+		// Analyse register usage for subroutine headers (§7.3 / §8.6).
+		this.analyzeRegisterUsage();
 
 		// Assign label names
 		this.assignLabelNames();
@@ -1736,6 +1753,29 @@ export class Disassembler extends EventEmitter {
 	}
 
 
+	/**
+	 * Analyses register usage for every CODE_SUB / CODE_RST label and
+	 * writes the results onto each DisLabel (§7.3 / §8.6).
+	 * Must run after countStatistics() (so callee.calls lists are ready)
+	 * and before addLabelComments() (so the header formatter can read them).
+	 */
+	protected analyzeRegisterUsage(): void {
+		const mem = this.memory;
+		const ctx: AnalyserContext = {
+			labels:                   this.labels,
+			addressParents:           this.addressParents,
+			rstDontFollowAddresses:   this.rstDontFollowAddresses,
+			isAssigned: addr =>
+				!!(mem.getAttributeAt(addr) & MemAttribute.ASSIGNED),
+			getOpcode: addr => {
+				const op = Opcode.getOpcodeAt(mem, addr);
+				return {...op} as any;
+			},
+		};
+		new RegAnalyzer(ctx).run();
+	}
+
+
 	/// Assign label names.
 	/// Is done in 2 passes:
 	/// 1. the major labels (e.g. "SUBnnn") are assigned and also the local label names without number.
@@ -1962,6 +2002,135 @@ export class Disassembler extends EventEmitter {
 		if (!addrLabel)
 			return undefined;
 
+		// Full firmware-style banner for real subroutines / restart
+		// vectors (§7.2). EQU labels keep the compact legacy form —
+		// the banner would waste 20+ lines on an external stub.
+		if (!addrLabel.isEqu &&
+			(addrLabel.type === NumberType.CODE_SUB ||
+			 addrLabel.type === NumberType.CODE_RST)) {
+			return this.getSubroutineHeader(address, addrLabel);
+		}
+
+		return this.getLegacyLabelComments(address, addrLabel);
+	}
+
+
+	/**
+	 * Builds the 79-column firmware-style header (§7.2 / §8.8) for a
+	 * CODE_SUB or CODE_RST label.
+	 */
+	protected getSubroutineHeader(address: number, addrLabel: DisLabel): Comment {
+		const s = this.addressStructured.get(address) ?? {} as StructuredFields;
+		const stat = this.subroutineStatistics.get(addrLabel);
+		const isRst = addrLabel.type === NumberType.CODE_RST;
+		const recursive = [...addrLabel.references].some(
+			ref => this.addressParents[ref] === addrLabel);
+		const lines: string[] = [];
+
+		// Banner (§7.2)
+		lines.push(buildBannerRule());
+		lines.push(buildBannerMid(addrLabel.name));
+		lines.push(buildBannerRule());
+
+		// Metadata
+		const typeStr = recursive ? 'Recursive subroutine'
+					  : isRst     ? 'Restart'
+					  :             'Subroutine';
+		lines.push(
+			'Address:   ' + Format.formatHex(address, 4) +
+			'          Size: ' + (stat ? stat.sizeInBytes : '?') + ' bytes' +
+			'     Instructions: ' + (stat ? stat.countOfInstructions : '?') +
+			'     CC: ' + (stat ? stat.CyclomaticComplexity : '?'));
+		lines.push('Type:      ' + typeStr);
+
+		// User-supplied prose fields. Empty => "—".
+		lines.push('');
+		lines.push('Summary:   ' + (s.summary ?? '—'));
+
+		lines.push('');
+		lines.push('Action:');
+		(s.action ?? ['—']).forEach(l => lines.push('  ' + l));
+
+		lines.push('');
+		lines.push('Entry:');
+		(s.entry ?? ['—']).forEach(l => lines.push('  ' + l));
+
+		lines.push('');
+		lines.push('Exit (success):');
+		(s.exitSuccess ?? ['—']).forEach(l => lines.push('  ' + l));
+		lines.push('Exit (failure):');
+		(s.exitFailure ?? ['—']).forEach(l => lines.push('  ' + l));
+
+		// Registers group — user override preferred over analyser output.
+		lines.push('');
+		lines.push('Registers:');
+		const corrupted = s.corrupted
+			? renderList(collapseRegisterPairs(new Set(s.corrupted)))
+			: renderList(addrLabel.corruptedRegisters
+				? collapseRegisterPairs(addrLabel.corruptedRegisters)
+				: undefined);
+		const preserved = s.preserved
+			? renderList(collapseRegisterPairs(new Set(s.preserved)))
+			: renderList(addrLabel.preservedRegisters
+				? collapseRegisterPairs(addrLabel.preservedRegisters)
+				: undefined);
+		lines.push('  Corrupted: ' + corrupted);
+		lines.push('  Preserved: ' + preserved);
+
+		// "(analysis unavailable: ...)" note — only when the analyser
+		// gave up AND the user has not overridden either register list.
+		if (addrLabel.registerAnalysisUnavailable &&
+			!s.corrupted && !s.preserved) {
+			lines.push('  (analysis unavailable: ' +
+				addrLabel.registerAnalysisUnavailable.reason + ')');
+		}
+
+		// Callers and callees — same data as the legacy header, new layout.
+		lines.push('');
+		lines.push('Called by: ' + this.renderCallers(addrLabel));
+		lines.push('Calls:     ' + this.renderCallees(addrLabel));
+
+		// Closing banner
+		lines.push(buildBannerRule());
+
+		const comment = new Comment();
+		comment.linesBefore = lines.map(l =>
+			l.startsWith('; ') ? l : (l.length ? '; ' + l : ';'));
+		return comment;
+	}
+
+
+	protected renderCallers(addrLabel: DisLabel): string {
+		if (addrLabel.references.size === 0) return '—';
+		const parts: string[] = [];
+		for (const ref of addrLabel.references) {
+			const hex = Format.formatHex(ref, 4);
+			const parent = this.addressParents[ref];
+			if (parent) {
+				const parName = (parent === addrLabel) ? 'self' : parent.name;
+				parts.push(parName + '[' + hex + ']');
+			}
+			else {
+				parts.push(hex);
+			}
+		}
+		return parts.join(', ');
+	}
+
+
+	protected renderCallees(addrLabel: DisLabel): string {
+		if (addrLabel.calls.length === 0) return '—';
+		const callees = new Set<DisLabel>();
+		for (const callee of addrLabel.calls) callees.add(callee);
+		return Array.from(callees).map(l => l.name).join(', ');
+	}
+
+
+	/**
+	 * Legacy one-/two-line label comment. Used for CODE_LBL, DATA_LBL,
+	 * and for EQU labels of every type.
+	 */
+	protected getLegacyLabelComments(address: number, addrLabel: DisLabel): Comment {
 		const lineArray = new Array<string>();
 		const refCount = addrLabel.references.size;
 		let line1;
@@ -2098,6 +2267,11 @@ export class Disassembler extends EventEmitter {
 		let commentAddr;
 		let commentLabelName;
 		let lineNr = 0;
+
+		// Per-block structured field accumulator (§8.9).
+		let structured: StructuredFields = {};
+		let currentMarker: string | undefined;
+
 		for (const line of commentsLines) {
 			lineNr++;
 			// Read in comments "before"
@@ -2117,6 +2291,9 @@ export class Disassembler extends EventEmitter {
 					// addresses added by --commentsout) must not block auto-generated comments.
 					if (comment.linesBefore || comment.inlineComment || comment.linesAfter)
 						this.addressComments.set(commentAddr, comment);
+					// Store structured fields when any were found (§8.9).
+					if (Object.keys(structured).length > 0)
+						this.addressStructured.set(commentAddr, structured);
 					// Set label
 					if (commentLabelName) {
 						this.setLabel(commentAddr, commentLabelName, NumberType.DATA_LBL);	// Data label might be changed to something else.
@@ -2127,6 +2304,8 @@ export class Disassembler extends EventEmitter {
 				comment = new Comment();
 				commentAddr = undefined;
 				commentLabelName = undefined;
+				structured = {};
+				currentMarker = undefined;
 				continue;
 			}
 			// check for state change
@@ -2140,9 +2319,34 @@ export class Disassembler extends EventEmitter {
 
 			// add lines
 			switch (state) {
-				case State.LinesBefore:
-					comment.addBefore(commentPart);
+				case State.LinesBefore: {
+					// Try to parse as a structured marker (§8.9).
+					const parsed = commentPart
+						? this.parseStructuredMarkerLine(commentPart)
+						: undefined;
+					if (parsed) {
+						currentMarker = parsed.marker;
+						this.applyStructuredMarker(structured, parsed.marker, parsed.value);
+					}
+					else if (currentMarker && commentPart) {
+						// Continuation line: starts with more whitespace after '; '.
+						const content = commentPart.replace(/^; /, '');
+						if (content.startsWith(' ')) {
+							this.applyStructuredMarker(
+								structured, currentMarker, content.trimStart());
+						}
+						else {
+							// Unindented non-marker: end continuation, go to legacy.
+							currentMarker = undefined;
+							comment.addBefore(commentPart);
+						}
+					}
+					else {
+						currentMarker = undefined;
+						comment.addBefore(commentPart);
+					}
 					break;
+				}
 				case State.lineOn:
 					comment.inlineComment = commentPart;
 					// Determine address and label
@@ -2169,6 +2373,101 @@ export class Disassembler extends EventEmitter {
 
 		}
 
+	}
+
+
+	/** Recognised structured field names (§8.9). */
+	private static readonly STRUCTURED_MARKERS = new Set([
+		'summary', 'action', 'entry',
+		'exit-success', 'exit-failure',
+		'corrupted', 'preserved',
+	]);
+
+
+	/**
+	 * Returns { marker, value } when `commentLine` is a structured field
+	 * opener like `; summary: text`, otherwise undefined.
+	 */
+	protected parseStructuredMarkerLine(
+		commentLine: string,
+	): {marker: string; value: string} | undefined {
+		const m = /^;\s*([a-z-]+)\s*:\s*(.*)$/.exec(commentLine);
+		if (!m) return undefined;
+		if (!Disassembler.STRUCTURED_MARKERS.has(m[1])) return undefined;
+		return {marker: m[1], value: m[2]};
+	}
+
+
+	/**
+	 * Appends `value` into the appropriate key of `s` according to `marker`.
+	 * Multi-line fields (action, entry, exit-*, corrupted, preserved) grow
+	 * a string array; summary is a single string (last write wins).
+	 * Register-list fields (corrupted, preserved) are expanded to 8-bit
+	 * halves so the pair-collapser in headerFormatters works correctly.
+	 */
+	protected applyStructuredMarker(
+		s: StructuredFields, marker: string, value: string,
+	): void {
+		switch (marker) {
+			case 'summary':
+				s.summary = value;
+				break;
+			case 'action':
+				(s.action ??= []).push(value);
+				break;
+			case 'entry':
+				(s.entry ??= []).push(value);
+				break;
+			case 'exit-success':
+				(s.exitSuccess ??= []).push(value);
+				break;
+			case 'exit-failure':
+				(s.exitFailure ??= []).push(value);
+				break;
+			case 'corrupted':
+				s.corrupted = this.parseRegList(value);
+				break;
+			case 'preserved':
+				s.preserved = this.parseRegList(value);
+				break;
+		}
+	}
+
+
+	/**
+	 * Splits a comma-separated register list and expands 16-bit pair
+	 * names to their 8-bit halves so that collapseRegisterPairs() can
+	 * later re-fold them consistently.
+	 *
+	 * Examples:
+	 *   "A, BC, F"  → ['A', 'B', 'C', 'F']
+	 *   "IX, IY"    → ['IXH', 'IXL', 'IYH', 'IYL']
+	 */
+	protected parseRegList(text: string): Z80Register[] {
+		const PAIR_MAP: Record<string, Z80Register[]> = {
+			'AF':  ['A', 'F'],
+			'BC':  ['B', 'C'],
+			'DE':  ['D', 'E'],
+			'HL':  ['H', 'L'],
+			'IX':  ['IXH', 'IXL'],
+			'IY':  ['IYH', 'IYL'],
+			"AF'": ["A'", "F'"],
+			"BC'": ["B'", "C'"],
+			"DE'": ["D'", "E'"],
+			"HL'": ["H'", "L'"],
+		};
+		const out: Z80Register[] = [];
+		for (const token of text.split(/[\s,]+/).filter(t => t.length > 0)) {
+			const upper = token.toUpperCase().replace(/'/g, "'");
+			const expanded = PAIR_MAP[upper];
+			if (expanded) {
+				out.push(...expanded);
+			}
+			else {
+				out.push(upper as Z80Register);
+			}
+		}
+		return out;
 	}
 
 

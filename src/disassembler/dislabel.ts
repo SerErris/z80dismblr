@@ -1,4 +1,5 @@
 import {NumberType, getNumberTypeAsString} from './numbertype';
+import {Z80Register} from './registerAnalysis';
 
 
 
@@ -38,6 +39,21 @@ export class DisLabel {
 	/// Determines if the type etc. might be changed.
 	/// E.g. used if the user sets a label, so that it is not changed afterwards.
 	public isFixed = false;
+
+	/// Registers whose value may change across the subroutine call.
+	/// Populated by analyzeRegisterUsage(). undefined = not analysed.
+	public corruptedRegisters?: Set<Z80Register>;
+
+	/// Registers whose value is guaranteed to be preserved across the call.
+	/// Populated by analyzeRegisterUsage(). undefined = not analysed.
+	public preservedRegisters?: Set<Z80Register>;
+
+	/// Set iff the analyser refused to commit (see §7.3.2). Drives the
+	/// "(analysis unavailable: ...)" note under the Registers group.
+	public registerAnalysisUnavailable?: {
+		reason:  string;
+		address: number;
+	};
 
 
 	/**

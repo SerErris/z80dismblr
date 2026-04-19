@@ -2743,9 +2743,15 @@ suite('Disassembler', () => {
 
 			//assert(linesUntrimmed[5] == 'SELF_MOD1:'); // Depends on priority
 			//assert(lines[3] == 'LD (SELF_MOD1+1),HL');
-			assert(linesUntrimmed[6] == 'SUB1:');
-			assert(lines[3] == 'LD (SUB1+1),HL');
-			assert(linesUntrimmed[10].indexOf("WARNING") >= 0);
+			// Position-independent: the new firmware-style banner made
+			// the raw-line indexes unstable. The SUB1: label and the
+			// self-modifying reference to SUB1+1 must still appear.
+			assert(linesUntrimmed.some((l: string) => l === 'SUB1:'),
+				'SUB1: label must appear in the disassembly');
+			assert(lines.some((l: string) => l === 'LD (SUB1+1),HL'),
+				'self-modifying LD must reference SUB1+1');
+			assert(linesUntrimmed.some((l: string) => l.indexOf('WARNING') >= 0),
+				'WARNING comment about self-modifying code must appear');
 		});
 
 
