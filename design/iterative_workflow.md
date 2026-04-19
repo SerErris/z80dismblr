@@ -942,12 +942,50 @@ the original bytes (modulo explicit `DEFS` fills).
 ### 6.5 Data grouping
 
 Current output emits one `DEFB` per byte for readability. Clean output
-groups:
+groups into multi-byte directives.
 
-- Eight bytes per line is a reasonable default: `defb 00h, 01h, 02h, …`
-- Mixed byte/word ranges: honour the label type — `DATA_LBL` with a
-  word-aligned access renders as `defw`.
-- `DEFS` for long zero-fill runs (threshold: 16 bytes or more).
+**v1 scope: byte-only grouping.** Enough to produce assembleable output
+that matches the original binary byte-for-byte. Ambitious improvements
+(word detection, string detection, struct detection) are deferred to
+later todo items — they improve readability but are not required for
+correctness.
+
+**v1 rules:**
+
+- Walk addresses with the `DATA` memory attribute.
+- Coalesce contiguous data bytes into `defb` lines, **8 bytes per line**
+  by default. Example: `defb $00, $01, $02, $03, $04, $05, $06, $07`.
+- **Break the group at every `DATA_LBL`** — the label goes on its own
+  line, then grouping resumes on the next line starting at that address.
+- **Break the group at every data↔code transition** — the data region
+  terminates; subsequent code starts fresh.
+- **Long zero runs (≥16 bytes)** use `defs N` / `ds N, 0` instead of
+  explicit `defb` lines.
+
+Example:
+
+```
+DATA_TABLE:
+                defb    $00, $01, $02, $03, $04
+SCORE_TABLE:
+                defb    $05, $06, $07, $08, $09, $0A, $0B, $0C
+                defb    $0D, $0E, $0F
+                defs    32, 0            ; 32-byte zero run
+```
+
+**Deferred to later increments** (tracked in `todo.md`):
+
+- **Word detection.** If a `DATA_LBL` is accessed by a 16-bit-load
+  instruction (`LD HL,(nn)`, `LD DE,(nn)`, etc.), emit the two bytes at
+  that address as a single `defw`. Requires storing access-size on the
+  label and resolving conflicts when the same address is accessed as
+  both byte and word.
+- **String detection.** Runs of printable ASCII → `defm "..."` (or
+  equivalent). Requires decisions on printable range, minimum run
+  length, terminator conventions, and dialect directive names.
+- **Struct / table detection.** Fixed-size records → grouped output.
+  Needs explicit user hints (`--args` or `--symbols`) — cannot be
+  reliably inferred from raw bytes.
 
 ### 6.6 Label names
 

@@ -12,6 +12,8 @@ Each item links to the relevant design document section for full context.
 | 1 | [Round-trip comments (Stream A)](#1-round-trip-comments-stream-a) | `iterative_workflow.md §7.1` | High |
 | 2 | [Clean assembler output (Stream B)](#2-clean-assembler-output-stream-b) | `iterative_workflow.md §7.2` | Medium |
 | 3 | [I/O port label handling](#3-io-port-label-handling) | `iterative_workflow.md §3.7.2` | Low |
+| 4 | [Data grouping — word detection (Level 2)](#4-data-grouping--word-detection-level-2) | `iterative_workflow.md §6.5` | Low |
+| 5 | [Data grouping — string & struct detection (Level 3)](#5-data-grouping--string--struct-detection-level-3) | `iterative_workflow.md §6.5` | Low |
 
 ---
 
@@ -143,7 +145,8 @@ $ z80dismblr --bin rom.bin --out rom.asm \
 | Custom `--opcode` extensions | Split back into `instruction + defb` lines |
 | ZX Next opcodes on maxam | Hard error, no partial output written |
 | Label name = reserved word | Hard error with rename hint |
-| Data grouping edge cases | Deferred — basic 8-byte grouping for v1 |
+| Data grouping (v1) | Byte-only: 8-per-line `defb`, break at labels and code boundaries, `defs N` for zero runs ≥16 bytes |
+| Word/string/struct detection | Deferred — see todos #4 and #5 |
 
 ### Implementation phases (from `iterative_workflow.md §7.2`)
 
@@ -320,3 +323,115 @@ the full address and device cannot be determined without runtime data.
 - `IN A,(n)` / `OUT (n),A` labelling is secondary; defer until the BC
   form is working and stable.
 - This feature is self-contained — does not depend on Stream A or B.
+
+---
+
+## 4. Data grouping — word detection (Level 2)
+
+**Design reference:** `iterative_workflow.md §6.5` (deferred section)
+
+### What it is
+
+When a `DATA_LBL` is accessed by a 16-bit-load instruction
+(`LD HL,(nn)`, `LD DE,(nn)`, `LD (nn),HL`, `LD IX,(nn)`, etc.), emit the
+two bytes at that address as a single `defw` rather than two `defb` bytes.
+
+Before (v1 — Level 1):
+```
+DATA_PTR:   defb $34, $12
+```
+
+After (Level 2):
+```
+DATA_PTR:   defw $1234
+```
+
+### Why it's deferred
+
+Output is semantically richer but requires design decisions that would
+delay Stream B v1:
+
+- **Access-size tracking.** The opcode that references a `DATA_LBL`
+  knows whether it's a word or byte load; the label itself does not
+  currently store this. Requires either a new `DisLabel.accessWidth`
+  field or a lookup at emit time across all opcodes that reference the
+  label.
+- **Conflicting access sizes.** Same address accessed as both byte and
+  word in different parts of the code — which representation wins?
+  Probably "larger wins" but needs confirmation.
+- **Unaligned word access.** `LD HL,(odd_address)` is legal on Z80 and
+  would emit an unaligned `defw`, breaking the byte grouping of adjacent
+  data in ugly ways.
+
+### Notes for resuming
+
+- The existing opcode decoder already flags the operand type
+  (`NUMBER_WORD` vs `NUMBER_BYTE`). Harvesting that at the label
+  reference point gives the access width.
+- Start by adding `DisLabel.accessWidth?: 1 | 2` and populating it
+  during `collectLabels()` when `DATA_LBL` targets are discovered.
+- Level 2 is purely a clean-emitter change once the data model has the
+  width. No round-trip implications.
+
+---
+
+## 5. Data grouping — string & struct detection (Level 3)
+
+**Design reference:** `iterative_workflow.md §6.5` (deferred section)
+
+### What it is
+
+Higher-level recognition of data patterns for more readable clean
+output:
+
+**String detection**
+```
+GREETING:   defm "Hello, World!", 0
+```
+
+Runs of printable ASCII → assembler string directive.
+
+**Struct / table detection**
+```
+ENEMY_TABLE:
+    ; {x, y, type, hp} × 4 records
+    defb 10, 20, 1, 100
+    defb 30, 40, 2, 80
+    ...
+```
+
+Fixed-size records emitted as logical rows.
+
+### Why it's deferred
+
+Every sub-feature here has open design questions:
+
+**String detection:**
+- What counts as "printable"? Just 0x20–0x7E? Include TAB/LF? Firmware-
+  specific control codes (Amstrad CPC has its own)?
+- Minimum run length to flag as a string (short runs look accidental)?
+- Termination conventions: null, length-prefix, high-bit-set terminator
+  (Amstrad convention)? User would need to declare via `--args` hint.
+- Directive name: `defm` (Maxam/sjasmplus), `db "..."`, `.ascii` —
+  dialect-specific.
+
+**Struct detection:**
+- Cannot be reliably inferred from raw bytes — needs explicit user hints
+  via `--args` or a new `--struct` option.
+- Record width, field types (byte/word/pointer), count of records —
+  all user input.
+
+### Notes for resuming
+
+- Tackle string detection first — it's the more common pattern in ROM
+  code and has fewer open decisions than struct detection.
+- Start with a conservative heuristic: at least 4 consecutive bytes in
+  range 0x20–0x7E, optionally followed by a terminator byte (0x00 or
+  0xFF), emit as string.
+- Add a `--string-min-length` and `--string-terminators` flag for user
+  override.
+- Struct detection should follow the `--datarange` pattern — a CLI flag
+  `--struct <address> <count> <fieldspec>` that declares a region.
+- Both are emitter-only changes — no round-trip or analysis implications.
+- These are readability improvements; the byte-only v1 output already
+  assembles correctly to the original bytes.
