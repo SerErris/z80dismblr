@@ -366,30 +366,43 @@ byte often don't-care `XX`):
 ##### Two Z80 I/O instruction forms and their labelling implications
 
 **`IN r,(C)` / `OUT (C),r`** — the full 16-bit port address is the
-value of the BC register pair. This is the primary form used in CPC
-firmware. The value of BC can often be traced statically from a
-preceding `LD BC,#xxxx`. When BC is a known constant at the point of
-the instruction, the disassembler can label the full 16-bit port.
+value of the BC register pair. **This is the primary form used in CPC
+code and firmware.** Both bytes of BC appear simultaneously on the
+full 16-bit address bus; partial decoding on specific bits of the high
+byte selects which device(s) respond. Typically code loads BC with the
+intended 16-bit address and then issues the I/O instruction.
 
-Example — `LD BC,#F640 : IN A,(C)` — port `#F640` selects the 8255
-PPI (b11=0 in `#F6`, b9=b8=10 → Port C) and reads keyboard row `#40`.
+The variant `OUT (C),C` is worth noting specifically: it places BC on
+the address bus for device selection **and** outputs the value of C as
+the data byte. This is used when the register selector or data value
+happens to live in C already, saving a register move. The 16-bit
+address bus behaviour is identical to any other `OUT (C),r` variant.
+
+Example — `LD BC,#7F00 : OUT (C),A` — BC=`#7F00` means b15=0, b14=1
+in the high byte → Gate Array responds. A carries the Gate Array command.
+
+Example — `LD BC,#F640 : IN A,(C)` — port `#F640` selects PPI (b11=0
+in `#F6`) Port C (b9=b8=10) and reads keyboard row `#40` (low byte).
+
+The value of BC can often be traced statically from a preceding
+`LD BC,#xxxx`, `LD B,#xx`, or `LD C,#xx`. When BC is a known constant
+at the point of the instruction, the disassembler can label the full
+16-bit port.
 
 **`IN A,(n)` / `OUT (n),A`** — the Z80 puts the **A register** in the
 high byte and the **8-bit immediate n** in the low byte. The effective
 16-bit port address is `(A << 8) | n`. Since A contains program data at
 runtime, the high byte (and therefore the device selection) is
 **runtime-dependent and cannot be determined by static analysis alone**.
+This form is less common in CPC code than the BC-register form above.
 
-Example — `OUT (#7F),A` where A=`%01xxxxxx`: the effective port address
-is `(A << 8) | #7F`. The high byte equals A, which has b14=1 and b15=0 →
-Gate Array responds. The data being written to the Gate Array is encoded
-in A itself (the same byte). This is a clever hardware design feature
-where the data and the device-select bits occupy the same byte.
+Example — `OUT (#7F),A` where A=`%01xxxxxx`: the effective port is
+`(A << 8) | #7F`. The high byte equals A with b14=1, b15=0 → Gate Array
+responds. Data and device-select bits are the same byte — a deliberate
+hardware design feature.
 
 For this form, the disassembler can only reliably label the **low byte**
-(`n`) and note that "the full 16-bit address depends on the value of A
-at runtime". Exact device labelling would require tracking A's value,
-which is a data-flow analysis problem beyond static disassembly.
+(`n`); device identification requires runtime knowledge of A.
 
 ##### Required changes to support port symbols
 

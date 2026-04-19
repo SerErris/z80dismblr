@@ -206,21 +206,32 @@ are ignored (partial address decoding). This means:
 
 ### Two instruction forms: different labelling difficulty
 
-**`IN r,(C)` / `OUT (C),r`** — port address = full BC register. This is
-the primary form used in CPC firmware. When BC is loaded from a constant
-immediately before the instruction, the 16-bit port address is statically
-known and can be labelled.
+**`IN r,(C)` / `OUT (C),r`** — port address = full BC register (16-bit).
+**This is the primary CPC I/O form.** BC is placed on the full 16-bit
+address bus; partial decoding on specific high-byte bits selects the
+device(s). Typically a `LD BC,#xxxx` (or `LD B,#xx` + `LD C,#xx`)
+immediately precedes the I/O instruction, making the 16-bit port address
+statically traceable.
+
+`OUT (C),C` is a notable variant: puts BC on the address bus for device
+selection AND outputs the C register value as data. Used when the data
+to write already lives in C. Addressing mechanism is identical to all
+other `OUT (C),r` forms.
+
+The language does not prevent a single instruction from satisfying
+multiple devices' partial-decode conditions simultaneously — the hardware
+will respond to all matching devices. This is intentional CPC design. The
+disassembler should label by the single intended canonical port address.
 
 **`IN A,(n)` / `OUT (n),A`** — Z80 puts **A** in the high byte and the
 8-bit immediate **n** in the low byte. Effective port = `(A << 8) | n`.
-Since A is program data at runtime, the **high byte (and therefore device
-selection) is runtime-dependent**. Static analysis cannot determine which
-device is being accessed. Only the low byte `n` is known statically.
+Since A is program data at runtime, the **high byte (device selection)
+is runtime-dependent**. Only `n` is known statically. Less common in
+CPC code than the BC form.
 
-On the CPC this is not a design problem but a feature: for `OUT (#7F),A`
-with A=`%01xxxxxx`, the same byte selects the Gate Array (b14=1, b15=0
-in the high byte = A) AND carries the Gate Array command data. The
-hardware is designed this way deliberately.
+`OUT (#7F),A` with A=`%01xxxxxx` is a special case: the same byte that
+selects the Gate Array (b14=1, b15=0 in the high byte = A) IS the Gate
+Array command. Hardware designed this way deliberately.
 
 ### CPC official port reference (from CPCWiki)
 
@@ -293,8 +304,9 @@ the full address and device cannot be determined without runtime data.
 - The `portLabels` map uses 16-bit keys. The existing `labels` map also
   uses 16-bit keys — keep them strictly separate; a collision on address
   value does not mean the same thing (port #F400 ≠ memory #F400).
-- Implementing only the `IN r,(C)` / `OUT (C),r` path first (with a
-  constant BC) covers the majority of CPC firmware calls and is the more
-  useful of the two instruction forms.
-- `IN A,(n)` / `OUT (n),A` labelling is secondary and can follow.
+- Implement `IN r,(C)` / `OUT (C),r` (constant BC) **first** — this
+  covers all typical CPC I/O including `OUT (C),C` patterns. It handles
+  the vast majority of CPC firmware and hardware access.
+- `IN A,(n)` / `OUT (n),A` labelling is secondary; defer until the BC
+  form is working and stable.
 - This feature is self-contained — does not depend on Stream A or B.
