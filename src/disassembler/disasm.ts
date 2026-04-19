@@ -2043,27 +2043,45 @@ export class Disassembler extends EventEmitter {
 			'     CC: ' + (stat ? stat.CyclomaticComplexity : '?'));
 		lines.push('Type:      ' + typeStr);
 
-		// User-supplied prose fields. Empty => "—".
-		lines.push('');
+		// ── Prose fields (no blank separators between any lines) ────────────
+		// Summary — always a single inline line.
 		lines.push('Summary:   ' + (s.summary ?? '—'));
 
-		lines.push('');
-		lines.push('Action:');
-		(s.action ?? ['—']).forEach(l => lines.push('  ' + l));
+		// Action — inline placeholder when undocumented, expanded when filled.
+		const actionItems = s.action ?? ['—'];
+		if (actionItems.length === 1 && actionItems[0] === '—') {
+			lines.push('Action:    —');
+		} else {
+			lines.push('Action:');
+			actionItems.forEach(l => lines.push('  ' + l));
+		}
 
-		lines.push('');
-		lines.push('Entry:');
-		(s.entry ?? ['—']).forEach(l => lines.push('  ' + l));
+		// Entry — same rule as Action.
+		const entryItems = s.entry ?? ['—'];
+		if (entryItems.length === 1 && entryItems[0] === '—') {
+			lines.push('Entry:     —');
+		} else {
+			lines.push('Entry:');
+			entryItems.forEach(l => lines.push('  ' + l));
+		}
 
-		lines.push('');
-		lines.push('Exit (success):');
-		(s.exitSuccess ?? ['—']).forEach(l => lines.push('  ' + l));
-		lines.push('Exit (failure):');
-		(s.exitFailure ?? ['—']).forEach(l => lines.push('  ' + l));
+		// Exit conditions — inline when single value (the common case).
+		const exitSuccessItems = s.exitSuccess ?? ['—'];
+		if (exitSuccessItems.length === 1) {
+			lines.push('Exit (success): ' + exitSuccessItems[0]);
+		} else {
+			lines.push('Exit (success):');
+			exitSuccessItems.forEach(l => lines.push('  ' + l));
+		}
+		const exitFailureItems = s.exitFailure ?? ['—'];
+		if (exitFailureItems.length === 1) {
+			lines.push('Exit (failure): ' + exitFailureItems[0]);
+		} else {
+			lines.push('Exit (failure):');
+			exitFailureItems.forEach(l => lines.push('  ' + l));
+		}
 
-		// Registers group — user override preferred over analyser output.
-		lines.push('');
-		lines.push('Registers:');
+		// ── Registers — no group label, no blank line ─────────────────────
 		const corrupted = s.corrupted
 			? renderList(collapseRegisterPairs(new Set(s.corrupted)))
 			: renderList(addrLabel.corruptedRegisters
@@ -2074,19 +2092,18 @@ export class Disassembler extends EventEmitter {
 			: renderList(addrLabel.preservedRegisters
 				? collapseRegisterPairs(addrLabel.preservedRegisters)
 				: undefined);
-		lines.push('  Corrupted: ' + corrupted);
-		lines.push('  Preserved: ' + preserved);
+		lines.push('Corrupted: ' + corrupted);
+		lines.push('Preserved: ' + preserved);
 
 		// "(analysis unavailable: ...)" note — only when the analyser
 		// gave up AND the user has not overridden either register list.
 		if (addrLabel.registerAnalysisUnavailable &&
 			!s.corrupted && !s.preserved) {
-			lines.push('  (analysis unavailable: ' +
+			lines.push('(analysis unavailable: ' +
 				addrLabel.registerAnalysisUnavailable.reason + ')');
 		}
 
-		// Callers and callees — same data as the legacy header, new layout.
-		lines.push('');
+		// ── Callers and callees ───────────────────────────────────────────
 		lines.push('Called by: ' + this.renderCallers(addrLabel));
 		lines.push('Calls:     ' + this.renderCallees(addrLabel));
 

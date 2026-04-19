@@ -62,26 +62,15 @@ For example the disassembly looks like this:
 ; *****************************************************************************
 ; *** sub SUB166                                                            ***
 ; *****************************************************************************
-; Address:   901Ch          Size: 38 bytes     Instructions: 20     CC: 4
+; Address:   901Ch     Size: 38 bytes   Instructions: 20   CC: 4
 ; Type:      Subroutine
-;
 ; Summary:   —
-;
-; Action:
-;   —
-;
-; Entry:
-;   —
-;
-; Exit (success):
-;   —
-; Exit (failure):
-;   —
-;
-; Registers:
-;   Corrupted: A, DE, HL, F
-;   Preserved: BC, IX, IY
-;
+; Action:    —
+; Entry:     —
+; Exit (success): —
+; Exit (failure): —
+; Corrupted: A, DE, HL, F
+; Preserved: BC, IX, IY
 ; Called by: INTRPT1[A612h]
 ; Calls:     SUB164
 ; *****************************************************************************
@@ -154,28 +143,19 @@ easy to spot when scrolling through a long listing.
 ; *****************************************************************************
 ; *** sub KM_EXP_BUFFER                                                     ***
 ; *****************************************************************************
-; Address:   BB15h          Size: 23 bytes     Instructions: 9      CC: 2
+; Address:   BB15h     Size: 23 bytes   Instructions: 9   CC: 2
 ; Type:      Subroutine
-;
 ; Summary:   Allocate a buffer for expansion strings.
-;
 ; Action:
 ;   Set the address and length of the expansion buffer. Initialise the
 ;   buffer with the default expansion strings.
-;
 ; Entry:
 ;   DE = address of the buffer
 ;   HL = length of the buffer
-;
-; Exit (success):
-;   Carry set.
-; Exit (failure):
-;   Carry clear (buffer too short).
-;
-; Registers:
-;   Corrupted: A, BC, DE, HL, F
-;   Preserved: IX, IY
-;
+; Exit (success): Carry set.
+; Exit (failure): Carry clear (buffer too short).
+; Corrupted: A, BC, DE, HL, F
+; Preserved: IX, IY
 ; Called by: SUB001[A123h]
 ; Calls:     KM_INITIALISE[BB00h]
 ; *****************************************************************************
@@ -200,10 +180,9 @@ Fields that cannot be determined statically (e.g. when the subroutine
 contains `JP (HL)`) are shown as `—` with an explanatory note:
 
 ~~~
-; Registers:
-;   Corrupted: —
-;   Preserved: —
-;   (analysis unavailable: JP (HL) at $A123 prevents static classification)
+; Corrupted: —
+; Preserved: —
+; (analysis unavailable: JP (HL) at $A123 prevents static classification)
 ~~~
 
 **User-supplied fields** (via `--comments` file, shown as `—` until filled):
@@ -383,15 +362,15 @@ The original disassembled code:
 ; *****************************************************************************
 ; *** sub SUB055                                                            ***
 ; *****************************************************************************
-; Address:   760Ah          Size: 44 bytes     Instructions: 22     CC: 4
+; Address:   760Ah     Size: 44 bytes   Instructions: 22   CC: 4
 ; Type:      Recursive subroutine
-;
 ; Summary:   —
-; ...
-; Registers:
-;   Corrupted: A, HL, F
-;   Preserved: BC, DE, IX, IY
-;
+; Action:    —
+; Entry:     —
+; Exit (success): —
+; Exit (failure): —
+; Corrupted: A, HL, F
+; Preserved: BC, DE, IX, IY
 ; Called by: SUB443[D752h], SUB442[D734h], SUB178[8405h], self[7631h], ...
 ; Calls:     SUB039, SUB103
 ; *****************************************************************************
@@ -424,25 +403,20 @@ This results in the more readable disassembly:
 ; *****************************************************************************
 ; *** sub sub_print_formatted_text_hl                                       ***
 ; *****************************************************************************
-; Address:   760Ah          Size: 44 bytes     Instructions: 22     CC: 4
+; Address:   760Ah     Size: 44 bytes   Instructions: 22   CC: 4
 ; Type:      Recursive subroutine
-;
 ; Summary:   Print a text in HL until end-of-string (0xFF).
-;
 ; Action:
 ;   Reads bytes from HL. FEh introduces a 16-bit integer argument,
 ;   FDh introduces a pointer to another text string (recursive).
-;
 ; Entry:
 ;   HL = pointer to formatted text
-;
-; Exit (success):
-;   HL advanced past the terminator
-; ...
-; Registers:
-;   Corrupted: A, HL, F
-;   Preserved: BC, DE, IX, IY
-; ...
+; Exit (success): HL advanced past the terminator.
+; Exit (failure): —
+; Corrupted: A, HL, F
+; Preserved: BC, DE, IX, IY
+; Called by: SUB443[D752h], SUB442[D734h], self[7631h], ...
+; Calls:     SUB039, SUB103
 ; *****************************************************************************
 760A sub_print_formatted_text_hl:
 760A 7E           ld   a,(hl)

@@ -109,7 +109,7 @@ suite('§8.5 disassemble() pipeline — full sub header', () => {
 			'Address:', 'Size:', 'Instructions:', 'CC:',
 			'Type:', 'Summary:', 'Action:', 'Entry:',
 			'Exit (success):', 'Exit (failure):',
-			'Registers:', 'Corrupted:', 'Preserved:',
+			'Corrupted:', 'Preserved:',
 			'Called by:', 'Calls:',
 		]) {
 			assert(text.includes(field),
@@ -223,6 +223,9 @@ suite('§8.5 disassemble() pipeline — full sub header', () => {
 			'JP (HL) sub must include the unavailable note');
 		assert(/JP \(HL\)/.test(textBad),
 			'note mentions the triggering opcode');
+		// Note appears directly under Preserved: (no indent, top-level line).
+		assert(/^; \(analysis unavailable:/m.test(textBad),
+			'unavailable note is a top-level comment line');
 	});
 
 });

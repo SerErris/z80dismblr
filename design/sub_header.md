@@ -280,31 +280,46 @@ header already provides.
 Every subroutine header is **79 columns wide** (suitable for standard
 terminals and assembler listings). The layout is, in order:
 
+**First-run (undocumented) output — 15 lines:**
+
 ```
 ; *****************************************************************************
 ; *** sub <NAME>                                                            ***
 ; *****************************************************************************
-; Address:   $XXXX          Size: NN bytes     Instructions: NN     CC: NN
+; Address:   $XXXX     Size: NN bytes   Instructions: NN   CC: NN
 ; Type:      Subroutine | Restart | Recursive subroutine
-;
-; Summary:   <one-line summary — user-supplied, "—" if absent>
-;
+; Summary:   —
+; Action:    —
+; Entry:     —
+; Exit (success): —
+; Exit (failure): —
+; Corrupted: <comma-separated list or "—">
+; Preserved: <comma-separated list or "—">
+; Called by: <parentName[$addr], ... or "—">
+; Calls:     <SUB_A, SUB_B, ... or "—">
+; *****************************************************************************
+<NAME>:
+```
+
+**Fully-documented output (multi-line Action/Entry):**
+
+```
+; *****************************************************************************
+; *** sub <NAME>                                                            ***
+; *****************************************************************************
+; Address:   $XXXX     Size: NN bytes   Instructions: NN   CC: NN
+; Type:      Subroutine | Restart | Recursive subroutine
+; Summary:   <one-line summary — user-supplied>
 ; Action:
-;   <free-form description — user-supplied, "—" if absent>
-;
+;   <line 1 of description>
+;   <line 2 of description>
 ; Entry:
-;   <per-register description — user-supplied, "—" if absent>
-;
-; Exit (success):
-;   <condition + register/flag state — user-supplied, "—" if absent>
-; Exit (failure):
-;   <condition + register/flag state — user-supplied, "—" if absent>
-;
-; Registers:
-;   Corrupted: <comma-separated list — user-supplied, "—" if absent>
-;   Preserved: <comma-separated list — user-supplied, "—" if absent>
-;   (analysis unavailable: <reason> at $XXXX)      ← only when analyser gave up
-;
+;   <register — description>
+; Exit (success): <condition — user-supplied>
+; Exit (failure): <condition — user-supplied>
+; Corrupted: <comma-separated list or "—">
+; Preserved: <comma-separated list or "—">
+; (analysis unavailable: <reason>)      ← only when analyser gave up
 ; Called by: <parentName[$addr], ... or "—">
 ; Calls:     <SUB_A, SUB_B, ... or "—">
 ; *****************************************************************************
@@ -323,9 +338,8 @@ terminals and assembler listings). The layout is, in order:
     - If the label name plus `sub ` prefix exceeds the 69-char content
       area the name is truncated with a trailing `…`; truncation should
       never happen in practice because label names stay short.
-- A single blank comment line (`;`) separates logical groups inside the
-  body. No blank lines appear between consecutive fields of the same
-  group.
+- **No blank separator lines** between fields — the field labels are
+  self-describing and blank lines add no information.
 
 #### Field rules
 
@@ -343,9 +357,13 @@ terminals and assembler listings). The layout is, in order:
 | `Called by` | Auto | `DisLabel.references` + `addressParents[]` (unchanged) |
 | `Calls` | Auto | `DisLabel.calls` (unchanged) |
 
-When a user-supplied field is empty the line becomes `; <Field>: —` so
-that alignment is preserved and the reader sees at a glance which fields
-still need documenting.
+When a user-supplied field is empty the placeholder is rendered inline
+(`; Action:    —`, `; Entry:     —`) so the header stays compact on a
+first run. Multi-line fields (`Action:`, `Entry:`) expand to a labelled
+block only when real content is present. `Exit (success):` and
+`Exit (failure):` are always inline — exit conditions are normally a
+single sentence. `Corrupted:` and `Preserved:` appear at top level
+(no `Registers:` group label).
 
 ### 7.3 Register-usage analysis
 
@@ -532,30 +550,21 @@ output would be:
 ; *****************************************************************************
 ; *** sub KM_EXP_BUFFER                                                     ***
 ; *****************************************************************************
-; Address:   $BB15          Size: 23 bytes     Instructions: 9      CC: 2
+; Address:   BB15h     Size: 23 bytes   Instructions: 9   CC: 2
 ; Type:      Subroutine
-;
 ; Summary:   Allocate a buffer for expansion strings.
-;
 ; Action:
 ;   Set the address and length of the expansion buffer. Initialise the
 ;   buffer with the default expansion strings.
-;
 ; Entry:
 ;   DE = address of the buffer
 ;   HL = length of the buffer
-;
-; Exit (success):
-;   Carry set.
-; Exit (failure):
-;   Carry clear (buffer too short).
-;
-; Registers:
-;   Corrupted: A, BC, DE, HL, F
-;   Preserved: IX, IY
-;
-; Called by: SUB001[$A123]
-; Calls:     KM_INITIALISE[$BB00]
+; Exit (success): Carry set.
+; Exit (failure): Carry clear (buffer too short).
+; Corrupted: A, BC, DE, HL, F
+; Preserved: IX, IY
+; Called by: SUB001[A123h]
+; Calls:     KM_INITIALISE[BB00h]
 ; *****************************************************************************
 KM_EXP_BUFFER:
     ...

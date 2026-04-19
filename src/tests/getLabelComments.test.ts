@@ -104,19 +104,24 @@ suite('§8.8 getLabelComments — firmware-style header', () => {
 		const joined = comment.linesBefore.join('\n');
 		assert(/Summary:\s+—/.test(joined),
 			'Summary defaults to em-dash on first run');
-		// Action / Entry / Exit groups render their single placeholder
-		// indented line as "—".
-		assert(/;   —/.test(joined),
-			'at least one placeholder "—" line under a user-field group');
+		// Action / Entry — inline placeholder when undocumented.
+		assert(/Action:\s+—/.test(joined),
+			'Action defaults to inline em-dash');
+		assert(/Entry:\s+—/.test(joined),
+			'Entry defaults to inline em-dash');
+		// Exit — inline placeholder.
+		assert(/Exit \(success\):\s+—/.test(joined),
+			'Exit (success) defaults to inline em-dash');
 	});
 
 
-	test('Registers group emits both Corrupted and Preserved lines', function () {
+	test('Corrupted and Preserved lines present (no Registers: group header)', function () {
 		if (!dasm.addressStructured) return this.skip();
 		const comment = disassembleTinySub();
 		const joined = comment.linesBefore.join('\n');
-		assert(/Corrupted:/.test(joined));
-		assert(/Preserved:/.test(joined));
+		assert(/^; Corrupted:/m.test(joined), 'Corrupted at top level');
+		assert(/^; Preserved:/m.test(joined), 'Preserved at top level');
+		assert(!/^; Registers:/m.test(joined), 'No Registers: group header');
 	});
 
 
