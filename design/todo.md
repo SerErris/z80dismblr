@@ -10,7 +10,7 @@ Each item links to the relevant design document section for full context.
 | # | Topic | Design ref | Priority |
 |---|-------|------------|----------|
 | 1 | [Round-trip comments (Stream A)](#1-round-trip-comments-stream-a) | `iterative_workflow.md §7.1` | High |
-| 2 | [Clean assembler output (Stream B)](#2-clean-assembler-output-stream-b) | `iterative_workflow.md §7.2` | Medium |
+| 2 | [Clean assembler output (Stream B)](#2-clean-assembler-output-stream-b) | `iterative_workflow.md §7.2` | ~~Medium~~ **Done** |
 | 3 | [I/O port label handling](#3-io-port-label-handling) | `iterative_workflow.md §3.7.2` | Low |
 | 4 | [Data grouping — word detection (Level 2)](#4-data-grouping--word-detection-level-2) | `iterative_workflow.md §6.5` | Low |
 | 5 | [Data grouping — string & struct detection (Level 3)](#5-data-grouping--string--struct-detection-level-3) | `iterative_workflow.md §6.5` | Low |
@@ -156,17 +156,17 @@ $ z80dismblr --bin rom.bin --out rom.asm \
 
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
-| B1 | `--cleanout` / `--cleanout-format` / `--cleanout-hex` CLI options | ⬜ |
-| B2 | `CleanEmitter` class — sjasmplus dialect, incl. EQU prologue + mnemonic table | ⬜ |
-| B2a | Invalid opcodes → raw `defb` bytes | ⬜ |
-| B2b | Custom `--opcode` extension expansion (instruction + trailing `defb`) — bypassed when `--cpc` is active | ⬜ |
-| B2c | Label name validation against per-dialect reserved words (hard error) | ⬜ |
-| B2d | CPC RST 3-byte expansion (rst + defw) — active only when `--cpc` set; mutually exclusive with B2b | ⬜ |
-| B3 | Data grouping (`defb` multi-byte, `defs` for runs) | ⬜ |
-| B4 | CI golden-file regression tests — includes SMC `label+offset` fixture | ⬜ |
-| B5 | Maxam dialect | ⬜ |
-| B5a | ZX Next detection for maxam → refuse emission with clear error | ⬜ |
-| B6 | Manual smoke test procedure (emit → assemble → byte-compare) | ⬜ |
+| B1 | `--cleanout` / `--cleanout-format` / `--cleanout-hex` CLI options | ✅ |
+| B2 | `CleanEmitter` class — sjasmplus dialect, incl. EQU prologue + mnemonic table | ✅ |
+| B2a | Invalid opcodes → raw `defb` bytes | ✅ |
+| B2b | Custom `--opcode` extension expansion (instruction + trailing `defb`) — bypassed when `--cpc` is active | ✅ |
+| B2c | Label name validation against per-dialect reserved words (hard error) | ✅ |
+| B2d | CPC RST 3-byte expansion (rst + defw) — active only when `--cpc` set; mutually exclusive with B2b | ✅ |
+| B3 | Data grouping (`defb` multi-byte, `defs` for runs) | ✅ |
+| B4 | CI golden-file regression tests — includes SMC `label+offset` fixture | ✅ |
+| B5 | Maxam dialect | ✅ |
+| B5a | ZX Next detection for maxam → refuse emission with clear error | ✅ |
+| B6 | Manual smoke test procedure (emit → assemble → byte-compare) | ✅ |
 
 ### Notes for resuming
 
