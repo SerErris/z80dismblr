@@ -39,6 +39,9 @@ class Startup {
     /// The auto-generated comments output path (--commentsout).
     protected static commentsOutFile: string|undefined;
 
+    /// Accumulated input args for merging into --argsout (one formatted string per option).
+    protected static stableArgs = new Array<string>();
+
     /// The out path for the flow-chart dot file.
     protected static flowChartOutPath: string|undefined;
 
@@ -91,13 +94,20 @@ class Startup {
             // Execute
             this.dasm.disassemble();
 
-            // Write discovered CPC entries
+            // Write output files
+            const discoveredDataRanges = this.dasm.discovered.filter(e => e.kind === 'datarange');
             if(this.argsOutFile) {
-                writeArgsOut(this.argsOutFile, this.dasm.discovered);
+                // Replace --comments with the commentsout path so the next run picks up
+                // the enriched comments file automatically.
+                const argsForNextRun = this.commentsOutFile
+                    ? this.stableArgs.map(a => a.startsWith('--comments ')
+                        ? '--comments ' + this.commentsOutFile
+                        : a)
+                    : this.stableArgs;
+                writeArgsOut(this.argsOutFile, argsForNextRun, discoveredDataRanges);
             }
             if(this.commentsOutFile) {
-                const dataRanges = this.dasm.discovered.filter(e => e.kind === 'datarange');
-                writeCommentsOut(this.commentsOutFile, this.dasm.getFullCommentsData(), dataRanges);
+                writeCommentsOut(this.commentsOutFile, this.dasm.getFullCommentsData(), discoveredDataRanges);
             }
 
             // Output disassembly
@@ -959,6 +969,12 @@ z80dismblr [options]
             }
         }
         // Will never reach here.
+    }
+
+
+    /** Formats an address as 0xNNNN for use in --argsout. */
+    protected static toHex(addr: number): string {
+        return '0x' + addr.toString(16).toUpperCase().padStart(4, '0');
     }
 
 
