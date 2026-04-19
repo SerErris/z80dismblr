@@ -142,9 +142,13 @@ $ z80dismblr --bin rom.bin --out rom.asm \
 | Digit separators | Not emitted |
 | EQU prologue | Emitted for every external (EQU) symbol, before any code |
 | Invalid opcodes | Emitted as raw `defb $XX` bytes (coalesced into data groups) |
-| Custom `--opcode` extensions | Split back into `instruction + defb` lines |
+| Custom `--opcode` extensions | Split back into `instruction + defb` lines (skipped when `--cpc` is active) |
+| CPC RST 3-byte opcodes | Emitted as `rst #XX` + `defw target` (active only when `--cpc` set) |
+| `--cpc` and `--opcode` | Mutually exclusive — `--cpc` wins, `--opcode` extensions ignored |
 | ZX Next opcodes on maxam | Hard error, no partial output written |
 | Label name = reserved word | Hard error with rename hint |
+| WARNING comments | Retained in clean output (greppable TODO markers) |
+| File format | LF endings, UTF-8 no BOM, tab indent, lowercase instructions |
 | Data grouping (v1) | Byte-only: 8-per-line `defb`, break at labels and code boundaries, `defs N` for zero runs ≥16 bytes |
 | Word/string/struct detection | Deferred — see todos #4 and #5 |
 
@@ -155,8 +159,9 @@ $ z80dismblr --bin rom.bin --out rom.asm \
 | B1 | `--cleanout` / `--cleanout-format` / `--cleanout-hex` CLI options | ⬜ |
 | B2 | `CleanEmitter` class — sjasmplus dialect, incl. EQU prologue + mnemonic table | ⬜ |
 | B2a | Invalid opcodes → raw `defb` bytes | ⬜ |
-| B2b | Custom `--opcode` extension expansion (instruction + trailing `defb`) | ⬜ |
+| B2b | Custom `--opcode` extension expansion (instruction + trailing `defb`) — bypassed when `--cpc` is active | ⬜ |
 | B2c | Label name validation against per-dialect reserved words (hard error) | ⬜ |
+| B2d | CPC RST 3-byte expansion (rst + defw) — active only when `--cpc` set; mutually exclusive with B2b | ⬜ |
 | B3 | Data grouping (`defb` multi-byte, `defs` for runs) | ⬜ |
 | B4 | CI golden-file regression tests — includes SMC `label+offset` fixture | ⬜ |
 | B5 | Maxam dialect | ⬜ |

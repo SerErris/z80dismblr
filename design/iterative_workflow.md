@@ -808,6 +808,28 @@ The clean file contains, in order:
 - No headers, no statistics, no caller/callee lists, no inline hex
   comments.
 
+**Exception — WARNING comments are preserved.** The verbose output
+currently emits `; WARNING: ...` lines wherever the disassembler
+detects unresolved conditions (self-modifying code, unreachable flow,
+indirect-jump targets, etc.). Clean output keeps these lines. They
+do not affect assembly (the assembler ignores them as comments) but
+they serve as greppable `TODO` markers for unresolved disassembly
+issues. A clean-output file with zero `WARNING` lines is a clean
+round-trip; a file with any `WARNING` line needs fixing before the
+disassembly can be considered complete.
+
+**File formatting conventions:**
+
+- Line endings: **LF only** (`\n`).
+- Encoding: **UTF-8, no BOM**.
+- Trailing newline at end of file: **yes**.
+- Label→instruction indentation: **tab character** (`\t`). Both
+  sjasmplus and maxam accept tabs; tabs are the conventional style
+  in CPC-era source.
+- Instruction case: **lowercase** by default. The existing
+  `opcodesLowerCase` mechanism can be reused; clean output forces it
+  to `true` regardless of what the verbose `--out` is configured to.
+
 Example (sjasmplus, default hex `$`):
 
 ```
@@ -934,6 +956,15 @@ all the required style variants.
 - Statistics (`Size=…, CC=…`)
 - Address prefixes on every line
 - User-written prose comments (they belong in `.asm`, not `.s`)
+
+**Retained (exception):**
+
+- `; WARNING: ...` lines — kept verbatim in the clean output. They
+  mark unresolved disassembly issues (self-modifying code, indirect
+  jumps, etc.) and do not affect assembly. A successful clean
+  round-trip has **zero** WARNING lines; any remaining WARNING is
+  a signal that the disassembly needs more user input before it can
+  be considered complete (see §6.2).
 
 The test is: pipe the output through the target assembler and compare
 the resulting binary with the original. The round-trip must produce
@@ -1080,6 +1111,10 @@ back into:
 The `appendValues` array carries the real byte values, so no
 re-reading of memory is needed.
 
+**Mutually exclusive with `--cpc` mode.** When `--cpc` is active the
+CPC RST handling in §6.7.5 takes over and `--opcode` extensions are
+ignored — mixing the two paths would double-count the inline bytes.
+
 #### 6.7.3 Undocumented and dialect-variant mnemonics
 
 Some Z80 mnemonics differ between assemblers:
@@ -1113,6 +1148,37 @@ First ZX Next opcode found at address $XXXX.
 
 No partial clean output is written when the refusal triggers —
 either the whole file assembles cleanly or nothing is written.
+
+#### 6.7.5 CPC RST 3-byte opcodes (takes precedence over `--opcode`)
+
+When `--cpc` is active, CPC firmware RST instructions occupy 3 bytes
+in memory (RST opcode + 2 inline bytes) and must emit as two lines:
+the RST mnemonic plus a `defw` for the inline target. This is handled
+by the existing `cpcRst.ts` module.
+
+**Rule:** `--cpc` mode and `--opcode` extensions are mutually exclusive
+in the clean emitter. When `--cpc` is active, any `--opcode` custom
+extensions (§6.7.2) are **ignored** — CPC RST handling produces the
+correct byte layout on its own, and mixing the two paths would double-
+count the inline bytes.
+
+Concretely:
+
+- `--cpc` active → use `cpcRst.ts` output (`rst` + `defw`). Skip §6.7.2
+  expansion entirely.
+- `--cpc` not active → use §6.7.2 custom-`--opcode` expansion as
+  normal.
+
+Example clean output for a FAR CALL to `KL_INIT` at `$BB15` with
+`--cpc` active:
+
+```
+                rst     $18
+                defw    KL_INIT
+```
+
+The 1-byte CPC RST kinds (`RESET`, `RAM_LAM`, `USER`, `INTERRUPT`)
+have no inline data and emit as a single `rst` line.
 
 ### 6.8 Label name validation
 
@@ -1183,8 +1249,9 @@ Two independent streams; either can be built first.
 | B1 | `--cleanout`/`--cleanout-format`/`--cleanout-hex` CLI options |
 | B2 | `CleanEmitter` class with sjasmplus dialect — includes EQU prologue (§6.2) and dialect mnemonic table (§6.7.3) |
 | B2a | Invalid opcodes → `defb` raw bytes (§6.7.1) |
-| B2b | Custom `--opcode` extension expansion back into `instruction + defb` (§6.7.2) |
+| B2b | Custom `--opcode` extension expansion back into `instruction + defb` (§6.7.2). **Bypassed when `--cpc` is active** |
 | B2c | Label name validation against per-dialect reserved words; hard error on collision (§6.8) |
+| B2d | CPC RST 3-byte expansion: `rst` mnemonic + `defw` target line (§6.7.5). Active only when `--cpc` is set; mutually exclusive with B2b |
 | B3 | Data grouping (§6.5) |
 | B4 | **CI regression tests** — golden-file byte-diff (`cleanout.golden.test.ts`), runs as part of `npm test`. Fixtures cover: both dialects, gap handling, local labels, `DEFS` runs, EQU prologue, invalid opcodes, custom `--opcode` expansion, and **self-modifying-code labels emitted as `label+offset` references** |
 | B5 | Maxam dialect |
