@@ -795,7 +795,11 @@ the same analysis pass and just produce two different emitters.
 
 The clean file contains, in order:
 
-- Optional file-top directive (assembler version hint comment, if any).
+- **EQU prologue** — one `LABEL equ $XXXX` line for every external
+  symbol (`isEqu = true` on the `DisLabel`). These resolve references
+  to addresses outside the loaded binary (firmware calls, RAM
+  variables, etc.) so the assembler can link them. Must come before
+  any code that uses them.
 - For each contiguous code range: an `ORG`/`org` directive.
 - Labels on their own lines, flush-left.
 - Instructions indented, in the target assembler's syntax.
@@ -807,6 +811,10 @@ The clean file contains, in order:
 Example (sjasmplus, default hex `$`):
 
 ```
+; EQU prologue — external symbols resolved to their canonical addresses
+KL_INIT_EXP     equ     $BCCE
+cursor_x        equ     $C000
+
                 org     $BB15
 
 KM_EXP_BUFFER:
@@ -825,6 +833,9 @@ KM_EXP_BUFFER:
 Example (maxam, default hex `#`):
 
 ```
+KL_INIT_EXP     equ     #BCCE
+cursor_x        equ     #C000
+
                 org     #BB15
 
 KM_EXP_BUFFER
@@ -994,7 +1005,100 @@ dialect switch needed.
 Verbose output (`--out`) uses the same dotted convention today. Clean
 output (`--cleanout`) inherits it.
 
-### 6.7 Open decisions
+### 6.7 Special instruction handling
+
+Several classes of opcode need explicit handling by the clean emitter
+because the assembler cannot parse what the verbose output produces.
+
+#### 6.7.1 Invalid opcodes → raw bytes
+
+The existing codebase uses `OpcodeInvalid` to represent bytes that
+decode to unused opcode slots (e.g. most DD-prefixed codes below 0x09).
+`OpcodeInvalid` emits the text
+`INVALID INSTRUCTION ; mostly equivalent to NOP.` in verbose output.
+No assembler accepts that.
+
+**Rule:** during clean emission, every `OpcodeInvalid` instance is
+written as `defb $XX` using the raw byte value. Adjacent invalid
+bytes are coalesced into the normal data-grouping rules (§6.5).
+
+#### 6.7.2 Custom `--opcode` extension expansion
+
+The existing `--opcode byte appendtext` CLI option lets users annotate
+certain opcodes with trailing inline data bytes — e.g.
+`--opcode 0xCF ", CODE=#n"` decodes `RST 08h` followed by one data byte
+as a single combined line `rst 08h, CODE=3Eh`. The real bytes are
+`CF 3E`; the trailing text is a disassembly convenience, not valid
+assembler syntax.
+
+**Rule:** during clean emission, custom-opcode instances (detectable
+by `appendValueTypes` being non-empty on the Opcode object) are split
+back into:
+
+1. The base instruction on its own line (`rst 08h`).
+2. One `defb` / `defw` line per appended value, at the addresses the
+   trailing bytes occupy.
+
+The `appendValues` array carries the real byte values, so no
+re-reading of memory is needed.
+
+#### 6.7.3 Undocumented and dialect-variant mnemonics
+
+Some Z80 mnemonics differ between assemblers:
+
+| Mnemonic | sjasmplus | maxam |
+|----------|-----------|-------|
+| `SLL r` (CB 30–37, undocumented shift-left-logical) | `sll r` | `sll r` (check — some ports use `sli`/`sl1`) |
+| `IXH`, `IXL`, `IYH`, `IYL` access | supported with undocumented flag | supported |
+| Various CB-prefix aliases | variant-specific | variant-specific |
+
+The emitter keeps a small per-dialect translation table keyed by the
+internal mnemonic string. When a mnemonic is known to differ, the
+table substitutes the dialect-specific spelling. Unknown mnemonics
+pass through verbatim.
+
+#### 6.7.4 ZX Next opcodes + maxam: refuse with error
+
+sjasmplus supports ZX Next opcodes (`MUL D,E`, `BSLA DE,B`, `TEST`,
+etc.) natively. maxam does not.
+
+**Rule:** if `--cleanout-format maxam` is specified AND the binary
+contains any opcode decoded by `OpcodeNext` / `OpcodeNextPush`, the
+emitter refuses to produce the clean output and exits with a clear
+error message:
+
+```
+z80dismblr: --cleanout-format maxam: this binary contains ZX Next opcodes
+which maxam does not support. Use --cleanout-format sjasmplus instead.
+First ZX Next opcode found at address $XXXX.
+```
+
+No partial clean output is written when the refusal triggers —
+either the whole file assembles cleanly or nothing is written.
+
+### 6.8 Label name validation
+
+Each target assembler has a set of reserved words (mnemonics, register
+names, directive names). If a user renames a label to a reserved word
+in round-trip editing, the clean output will fail to assemble with a
+cryptic error from the assembler.
+
+**Rule:** during clean emission, validate every label name against a
+reserved-word list for the target dialect. A collision is a **hard
+error** (same failure mode as ZX Next + maxam): refuse to emit,
+print the offending label and address, suggest renaming.
+
+```
+z80dismblr: label 'ADD' at $BB15 is a reserved word in sjasmplus.
+Rename the label in rom.asm and try again.
+```
+
+This catches user mistakes at disassembler time rather than at the
+first assembly attempt, which usually happens minutes later with a
+less helpful error message. The reserved-word list is stored per
+dialect in the clean emitter.
+
+### 6.9 Open decisions
 
 - **Hex style defaults.** Resolved: sjasmplus → `$AB` (classic Z80
   convention), maxam → `#AB` (firmware-manual convention, already
@@ -1039,14 +1143,15 @@ Two independent streams; either can be built first.
 | Phase | Deliverable |
 |-------|-------------|
 | B1 | `--cleanout`/`--cleanout-format`/`--cleanout-hex` CLI options |
-| B2 | `CleanEmitter` class with sjasmplus dialect |
+| B2 | `CleanEmitter` class with sjasmplus dialect — includes EQU prologue (§6.2) and dialect mnemonic table (§6.7.3) |
+| B2a | Invalid opcodes → `defb` raw bytes (§6.7.1) |
+| B2b | Custom `--opcode` extension expansion back into `instruction + defb` (§6.7.2) |
+| B2c | Label name validation against per-dialect reserved words; hard error on collision (§6.8) |
 | B3 | Data grouping (§6.5) |
-| B4 | **CI regression tests** — golden-file byte-diff (`cleanout.golden.test.ts`), runs as part of `npm test`. Representative fixtures covering both dialects, gap handling, local labels, `DEFS` runs |
+| B4 | **CI regression tests** — golden-file byte-diff (`cleanout.golden.test.ts`), runs as part of `npm test`. Fixtures cover: both dialects, gap handling, local labels, `DEFS` runs, EQU prologue, invalid opcodes, custom `--opcode` expansion, and **self-modifying-code labels emitted as `label+offset` references** |
 | B5 | Maxam dialect |
+| B5a | ZX Next opcode detection for maxam target: refuse emission with clear error message (§6.7.4) |
 | B6 | Manual smoke test — documented procedure: emit → external `sjasmplus`/`maxam` → compare bytes to original binary. Pre-release checklist item |
-
-Stream A is more valuable for day-to-day RE work and should ship first.
-Stream B is straightforward formatter work and can follow.
 
 ---
 

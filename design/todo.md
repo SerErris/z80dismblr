@@ -138,16 +138,26 @@ $ z80dismblr --bin rom.bin --out rom.asm \
 | Local labels | `.sub_loop1` style — same as verbose output; works on both assemblers |
 | `ORG` on gaps | One `org` per contiguous assigned range |
 | Digit separators | Not emitted |
+| EQU prologue | Emitted for every external (EQU) symbol, before any code |
+| Invalid opcodes | Emitted as raw `defb $XX` bytes (coalesced into data groups) |
+| Custom `--opcode` extensions | Split back into `instruction + defb` lines |
+| ZX Next opcodes on maxam | Hard error, no partial output written |
+| Label name = reserved word | Hard error with rename hint |
+| Data grouping edge cases | Deferred — basic 8-byte grouping for v1 |
 
 ### Implementation phases (from `iterative_workflow.md §7.2`)
 
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
 | B1 | `--cleanout` / `--cleanout-format` / `--cleanout-hex` CLI options | ⬜ |
-| B2 | `CleanEmitter` class — sjasmplus dialect | ⬜ |
+| B2 | `CleanEmitter` class — sjasmplus dialect, incl. EQU prologue + mnemonic table | ⬜ |
+| B2a | Invalid opcodes → raw `defb` bytes | ⬜ |
+| B2b | Custom `--opcode` extension expansion (instruction + trailing `defb`) | ⬜ |
+| B2c | Label name validation against per-dialect reserved words (hard error) | ⬜ |
 | B3 | Data grouping (`defb` multi-byte, `defs` for runs) | ⬜ |
-| B4 | CI golden-file regression tests (`cleanout.golden.test.ts`) | ⬜ |
+| B4 | CI golden-file regression tests — includes SMC `label+offset` fixture | ⬜ |
 | B5 | Maxam dialect | ⬜ |
+| B5a | ZX Next detection for maxam → refuse emission with clear error | ⬜ |
 | B6 | Manual smoke test procedure (emit → assemble → byte-compare) | ⬜ |
 
 ### Notes for resuming
