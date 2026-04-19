@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { Opcode, Opcodes } from './disassembler/opcode';
 import { writeArgsOut, writeSymbolsOut } from './disassembler/argsWriter';
 import { Format, HexFormat } from './disassembler/format';
+import { CleanEmitter, CleanFormat, CleanHex, defaultHexForFormat, parseCleanFormat, parseCleanHex } from './disassembler/cleanEmitter';
 import * as Path from 'path';
 //import * as assert from 'assert';
 //import { DisLabel } from './disassembler/dislabel';
@@ -42,6 +43,15 @@ class Startup {
     /// Accumulated input args for merging into --argsout (one formatted string per option).
     protected static stableArgs = new Array<string>();
 
+    /// The clean assembler output file path (--cleanout).
+    protected static cleanOutPath: string|undefined;
+
+    /// The target assembler format for clean output (--cleanout-format).
+    protected static cleanOutFormat: CleanFormat = 'sjasmplus';
+
+    /// The hex style for clean output (--cleanout-hex). Undefined = auto-default per format.
+    protected static cleanOutHex: CleanHex|undefined;
+
     /// The out path for the flow-chart dot file.
     protected static flowChartOutPath: string|undefined;
 
@@ -79,8 +89,8 @@ class Startup {
             this.processArgs(args);
 
             // Check if any output is given
-            if(!this.outPath && !this.callGraphOutPath && !this.flowChartOutPath) {
-                throw "You need to set an output path via '--out' or '--callgraphout'.";
+            if(!this.outPath && !this.callGraphOutPath && !this.flowChartOutPath && !this.cleanOutPath) {
+                throw "You need to set an output path via '--out', '--callgraphout', or '--cleanout'.";
             }
 
             // Lower case opcodes?
@@ -93,6 +103,13 @@ class Startup {
 
             // Execute
             this.dasm.disassemble();
+
+            // Write clean assembler output (--cleanout)
+            if (this.cleanOutPath) {
+                const hex = this.cleanOutHex ?? defaultHexForFormat(this.cleanOutFormat);
+                const emitter = new CleanEmitter(this.dasm, this.cleanOutFormat, hex);
+                emitter.writeToFile(this.cleanOutPath);
+            }
 
             // Write output files
             const discoveredDataRanges = this.dasm.discovered.filter(e => e.kind === 'datarange');
@@ -580,6 +597,32 @@ z80dismblr [options]
                     this.commentsOutFile = args.shift();
                     if(!this.commentsOutFile) {
                         throw arg + ': No path given.';
+                    }
+                    break;
+
+                // Clean assembler output file
+                case '--cleanout':
+                    this.cleanOutPath = args.shift();
+                    if(!this.cleanOutPath) {
+                        throw arg + ': No path given.';
+                    }
+                    break;
+
+                // Clean output assembler format
+                case '--cleanout-format':
+                    {
+                        const fmt = args.shift();
+                        if(!fmt) throw arg + ': No format given.';
+                        this.cleanOutFormat = parseCleanFormat(fmt);
+                    }
+                    break;
+
+                // Clean output hex style
+                case '--cleanout-hex':
+                    {
+                        const hexStr = args.shift();
+                        if(!hexStr) throw arg + ': No hex style given.';
+                        this.cleanOutHex = parseCleanHex(hexStr);
                     }
                     break;
 

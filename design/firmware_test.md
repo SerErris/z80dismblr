@@ -5,8 +5,8 @@ for the `cleanout_smoke_test.md` procedure.  Its only purpose is to
 exercise every clean-emitter code path so that:
 
 - `firmware_test.s` → `sjasmplus` → `firmware_test.bin` →
-  `z80dismblr --cpc --cleanout firmware_out.s` → `sjasmplus` →
-  `firmware_out.bin` must equal `firmware_test.bin` **byte for byte**.
+  `z80dismblr --cpc --cleanout smoke_test_out.s` → `sjasmplus` →
+  `smoke_test_out.bin` must equal `firmware_test.bin` **byte for byte**.
 - Any emitter path not exercised here is a coverage gap that will
   silently escape the smoke test — so we list every feature up front
   and keep this doc as the authoritative inventory.
@@ -568,33 +568,33 @@ node out/z80dismblr.js \
     --codelabel 0xC00C jp_cmd_beep  \
     --codelabel 0xC00F jp_cmd_fill  \
     \
-    --datalabel 0xC000 rom_header    \
-    --datalabel 0xC0FA banner_msg    \
-    --datalabel 0xC105 misc_data     \
-    --datalabel 0xC115 handler_table \
-    --datalabel 0xC11B byte_table    \
-    --datalabel 0xC12B rsx_names     \
-    --datalabel 0xC200 fill_pattern  \
+    --symbols src/tests/data/smoke_test.sym \
     \
     --datarange 0xC000  6  \
     --datarange 0xC0FA 71  \
     --datarange 0xC200 32  \
     \
     --cpc \
-    --cleanout src/tests/data/firmware_out.s \
+    --cleanout src/tests/data/smoke_test_out.s \
     --cleanout-format sjasmplus
 
-# 3. Re-assemble the clean output — it also has two ORG blocks, so the
-#    same SAVEBIN trick is needed.  Add to firmware_out.s manually once,
-#    or use a wrapper script; for a one-shot test just split with head/tail:
-sjasmplus --raw=src/tests/data/firmware_out_raw.bin src/tests/data/firmware_out.s
-head -c 321 src/tests/data/firmware_out_raw.bin > src/tests/data/firmware_out_block1.bin
-tail -c  32 src/tests/data/firmware_out_raw.bin > src/tests/data/firmware_out_block2.bin
+# 3. Golden diff — compare the clean output against the checked-in reference.
+#    smoke_test_in.s is the known-good disassembly committed to the repo.
+#    Any difference here means the clean emitter changed its output.
+diff src/tests/data/smoke_test_in.s src/tests/data/smoke_test_out.s && \
+echo "Golden diff: OK" || echo "Golden diff: FAIL"
 
-# 4. Byte-diff — compare each block separately.
-cmp src/tests/data/smoke_test_block1.bin src/tests/data/firmware_out_block1.bin && \
-cmp src/tests/data/smoke_test_block2.bin src/tests/data/firmware_out_block2.bin && \
-echo OK || echo FAIL
+# 4. Re-assemble the clean output — it also has two ORG blocks, so the
+#    same SAVEBIN trick is needed.  Add to smoke_test_out.s manually once,
+#    or use a wrapper script; for a one-shot test just split with head/tail:
+sjasmplus --raw=src/tests/data/smoke_test_out_raw.bin src/tests/data/smoke_test_out.s
+head -c 321 src/tests/data/smoke_test_out_raw.bin > src/tests/data/smoke_test_out_block1.bin
+tail -c  32 src/tests/data/smoke_test_out_raw.bin > src/tests/data/smoke_test_out_block2.bin
+
+# 5. Byte-diff — compare each block separately.
+cmp src/tests/data/smoke_test_block1.bin src/tests/data/smoke_test_out_block1.bin && \
+cmp src/tests/data/smoke_test_block2.bin src/tests/data/smoke_test_out_block2.bin && \
+echo "Binary round-trip: OK" || echo "Binary round-trip: FAIL"
 ```
 
 `--cpc` is mandatory — it enables 3-byte RST handling, which is what

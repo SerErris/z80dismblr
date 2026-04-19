@@ -1,0 +1,61 @@
+; ── EQU — external firmware addresses (not part of the binary) ───────────────
+
+BB5A TXT_OUTPUT
+
+BCA7 SOUND_ENGINE
+
+BCD1 KL_LOG_EXT
+
+BD0D KL_TIME_PLEASE
+
+A700 rsx_workspace
+
+; ── ROM header ───────────────────────────────────────────────────────────────
+
+C000 rom_header
+
+; ── Code labels ──────────────────────────────────────────────────────────────
+
+C012 init
+
+C01E cmd_hello
+
+C02D cmd_beep
+
+C043 cmd_fill
+
+C06B print_string
+
+C077 delay
+
+C07E jump_demo
+
+C09A bit_demo
+
+C0B1 alu_demo
+
+C0C4 io_demo
+
+C0D3 swap_demo
+
+C0D8 int_demo
+
+C0E0 dispatch
+
+C0E5 prefix_demo
+
+; ── Data labels ──────────────────────────────────────────────────────────────
+
+C0FA banner_msg
+
+C105 misc_data
+
+C111 embedded_lbl
+
+C115 handler_table
+
+C11B byte_table
+
+C12B rsx_names
+
+C200 fill_pattern

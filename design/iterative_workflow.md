@@ -23,7 +23,7 @@ Today the reverse-engineering loop looks like this:
 
 ```
 +-------------+           +--------------+
-| foo.bin     |           | foo.cmt      |    (sidecar structured
+| foo.bin     |           | foo.sym      |    (sidecar structured
 +------+------+           +------+-------+     --symbols file)
        |                         |
        +------------+------------+
@@ -41,7 +41,7 @@ The user keeps manually authored metadata in `foo.cmt` and reads the
 output in `foo.list`. Pain points:
 
 - **Two files kept in sync by hand.** Addresses appear in both.
-- **Context switching.** Editing `foo.cmt` while staring at `foo.list` is
+- **Context switching.** Editing `foo.sym` while staring at `foo.list` is
   mentally expensive — addresses and labels must be transcribed.
 - **Label renaming is clumsy.** Changing `SUB042` to `KM_EXP_BUFFER` means
   editing the sidecar and trusting the disassembler to pick it up next
@@ -51,37 +51,49 @@ output in `foo.list`. Pain points:
 
 ### 1.2 Goal
 
-A single-file iterative loop:
+A single-file iterative loop.  On every run the tool reads three inputs and
+writes one primary output:
 
 ```
-+-------------+
-| foo.bin     |
-+------+------+
-       |
-       v
-  z80dismblr  <-----+          (same file is both output
-       |           |            and next-run input)
-       v           |
-+-------------+    |
-| foo.asm     |----+
-+------^------+
-       |
-       | (user edits in VS Code: adds summaries, renames labels,
-       |  writes prose between subroutines)
-       +
++-------------+  +--------------+  +--------------------+
+| foo.bin     |  | foo.sym      |  | foo.asm            |
+|             |  | (--args /    |  | (previous run,     |
+|  binary     |  |  --symbols   |  |  user-edited)      |
++------+------+  |  sidecar)    |  +--------+-----------+
+       |         +------+-------+           |
+       |                |                   |
+       +----------------+-------------------+
+                        |
+                        v
+                   z80dismblr
+                        |
+                        v
+                 +------+------+
+                 | foo.asm     |  (updated annotated listing)
+                 +------+------+
+                        |
+                 (user edits in VS Code: renames labels,
+                  adds summaries, writes prose between subs)
+                        |
+                        v
+                   (next run) ──────────────────────────────┐
+                                                            │
+                   reads the edited foo.asm as input again ─┘
 ```
 
 and as a second deliverable, a side-output for assembler round-tripping:
 
 ```
-  z80dismblr
-       |
-       +-------+
-       |       |
-       v       v
-+-----------+ +----------+
-| foo.asm   | | foo.s    |  (assembleable by sjasmplus/maxam,
-+-----------+ +----------+   produces the original binary back)
+                   z80dismblr
+                        |
+               +--------+--------+
+               |                 |
+               v                 v
+        +-----------+     +----------+
+        | foo.asm   |     | foo.s    |  (assembleable by sjasmplus/maxam,
+        +-----------+     +----------+   produces the original binary back)
+         annotated
+         listing
 ```
 
 ---

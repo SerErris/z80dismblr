@@ -60,7 +60,7 @@ export const CPC_RST: ReadonlyMap<number, CpcRstInfo> = new Map<number, CpcRstIn
     [0xDF, { kind: CpcRstKind.FAR_CALL,  z80opcode: 0xDF, z80hex: '#18', funcName: 'FAR CALL',     size: 3, isJump: false, isCall: true,  hasInline: true  }],
     [0xE7, { kind: CpcRstKind.RAM_LAM,   z80opcode: 0xE7, z80hex: '#20', funcName: 'RAM LAM',      size: 1, isJump: false, isCall: false, hasInline: false }],
     [0xEF, { kind: CpcRstKind.FIRM_JUMP, z80opcode: 0xEF, z80hex: '#28', funcName: 'FIRM JUMP',    size: 3, isJump: true,  isCall: false, hasInline: true  }],
-    [0xF7, { kind: CpcRstKind.USER,      z80opcode: 0xF7, z80hex: '#30', funcName: 'USER RESTART', size: 1, isJump: false, isCall: false, hasInline: false }],
+    [0xF7, { kind: CpcRstKind.USER,      z80opcode: 0xF7, z80hex: '#30', funcName: 'USER RESTART', size: 1, isJump: false, isCall: true,  hasInline: false }],
     [0xFF, { kind: CpcRstKind.INTERRUPT, z80opcode: 0xFF, z80hex: '#38', funcName: 'INTERRUPT',    size: 1, isJump: false, isCall: false, hasInline: false }],
 ]);
 

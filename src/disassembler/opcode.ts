@@ -32,6 +32,8 @@ export class Opcode {
 	public name: string;
 	/// An optional comment, e.g. "; ZX Next opcode"
 	protected comment: string;
+	/// True for ZX Next opcodes (OpcodeNext / OpcodeNextPush).
+	public isNextOpcode: boolean = false;
 	/// Opcode flags: branch-address, call, stop
 	public flags: OpcodeFlag;
 	/// The additional value in the opcode, e.g. nn or n
@@ -48,6 +50,10 @@ export class Opcode {
 
 	/// For custom opcodes further bytes to decode can be added.
 	public appendValueTypes: Array<NumberType>;
+
+	/// The mnemonic template BEFORE any --opcode extension was appended.
+	/// Only set when appendToOpcode() has been called; undefined otherwise.
+	public baseName: string | undefined;
 
 	/// Registers written (clobbered) by this opcode. Populated by
 	/// initializeRegisterEffects() at module load. undefined until then.
@@ -88,19 +94,53 @@ export class Opcode {
 	/// Call this to use lower case or upper case opcodes.
 	public static makeLowerCase() {
 		for (let oc of Opcodes)
-			oc.name = oc.name.toLowerCase();
+			{ oc.name = oc.name.toLowerCase(); if (oc.baseName) oc.baseName = oc.baseName.toLowerCase(); }
 		for (let oc of OpcodesCB)
-			oc.name = oc.name.toLowerCase();
+			{ oc.name = oc.name.toLowerCase(); if (oc.baseName) oc.baseName = oc.baseName.toLowerCase(); }
 		for (let oc of OpcodesDD)
-			oc.name = oc.name.toLowerCase();
+			{ oc.name = oc.name.toLowerCase(); if (oc.baseName) oc.baseName = oc.baseName.toLowerCase(); }
 		for (let oc of OpcodesED)
-			oc.name = oc.name.toLowerCase();
+			{ oc.name = oc.name.toLowerCase(); if (oc.baseName) oc.baseName = oc.baseName.toLowerCase(); }
 		for (let oc of OpcodesFD)
-			oc.name = oc.name.toLowerCase();
+			{ oc.name = oc.name.toLowerCase(); if (oc.baseName) oc.baseName = oc.baseName.toLowerCase(); }
 		for (let oc of OpcodesDDCB)
-			oc.name = oc.name.toLowerCase();
+			{ oc.name = oc.name.toLowerCase(); if (oc.baseName) oc.baseName = oc.baseName.toLowerCase(); }
 		for (let oc of OpcodesFDCB)
-			oc.name = oc.name.toLowerCase();
+			{ oc.name = oc.name.toLowerCase(); if (oc.baseName) oc.baseName = oc.baseName.toLowerCase(); }
+	}
+
+
+	/**
+	 * Save all opcode name strings and return a restore function.
+	 * Used by CleanEmitter to temporarily lower-case opcode templates without
+	 * permanently affecting the global opcode tables.
+	 */
+	/**
+	 * Snapshot ALL mutable per-opcode fields that makeLowerCase() or appendToOpcode()
+	 * can change, and return a restore function.
+	 */
+	public static saveNames(): () => void {
+		const allTables = [Opcodes, OpcodesCB, OpcodesDD, OpcodesED, OpcodesFD, OpcodesDDCB, OpcodesFDCB];
+		type Snapshot = { name: string; baseName: string | undefined; comment: string; length: number; appendValueTypes: Array<NumberType> | undefined; appendValues: Array<number> | undefined };
+		const saved: Snapshot[][] = allTables.map(tbl => tbl.map(oc => ({
+			name:             oc.name,
+			baseName:         oc.baseName,
+			comment:          oc.comment,
+			length:           oc.length,
+			appendValueTypes: oc.appendValueTypes ? [...oc.appendValueTypes] : undefined,
+			appendValues:     oc.appendValues     ? [...oc.appendValues]     : undefined,
+		})));
+		return () => {
+			allTables.forEach((tbl, ti) => tbl.forEach((oc, oi) => {
+				const s = saved[ti][oi];
+				oc.name             = s.name;
+				oc.baseName         = s.baseName;
+				(oc as any).comment = s.comment;
+				oc.length           = s.length;
+				oc.appendValueTypes = s.appendValueTypes as Array<NumberType>;
+				oc.appendValues     = s.appendValues     as Array<number>;
+			}));
+		};
 	}
 
 
@@ -267,6 +307,9 @@ export class Opcode {
 	public appendToOpcode(appendName: string) {
 		if (!appendName || appendName.length == 0)
 			return;
+
+		// Snapshot the current name so CleanEmitter can emit just the base mnemonic
+		this.baseName = this.name;
 
 		this.appendValues = new Array<number>();
 		this.appendValueTypes = new Array<NumberType>();
@@ -680,7 +723,8 @@ class OpcodeNext extends Opcode {
 	// Constructor.
 	constructor(code: number, name: string) {
 		super(code, name);
-		this.comment = 'ZX Next opcode'
+		this.comment = 'ZX Next opcode';
+		this.isNextOpcode = true;
 	}
 
 	/// Clone not supported.
@@ -1861,8 +1905,8 @@ export const OpcodesDD: Array<Opcode> = [
 	new OpcodeInvalid(0x31),
 	new OpcodeInvalid(0x32),
 	new OpcodeInvalid(0x33),
-	new Opcode(0x34, "INC (IX)"),
-	new Opcode(0x35, "DEC (IX)"),
+	new OpcodeIndex(0x34, "INC (IX%s)"),
+	new OpcodeIndex(0x35, "DEC (IX%s)"),
 	new OpcodeIndexImmediate(0x36, 'LD (IX%s),%s'),
 	new OpcodeInvalid(0x37),
 	new OpcodeInvalid(0x38),

@@ -686,7 +686,7 @@ export class Disassembler extends EventEmitter {
 			//console.log('address=0x' + address.toString(16));
 			// disassemble until stop-code
 			//console.log('===');
-			do {
+			while (true) {
 				//console.log('addr=' + address.toString(16));
 				// Check if memory has already been disassembled
 				let attr = this.memory.getAttributeAt(address);
@@ -795,9 +795,7 @@ export class Disassembler extends EventEmitter {
 
 				// Next address
 				address += opcode.length;
-
-				// Check for end of disassembly (JP, RET)
-			} while (!(opcode.flags & OpcodeFlag.STOP));
+			}
 
 			if (this.DBG_COLLECT_LABELS)
 				console.log('\n');
@@ -2309,9 +2307,12 @@ export class Disassembler extends EventEmitter {
 					// Store structured fields when any were found (§8.9).
 					if (Object.keys(structured).length > 0)
 						this.addressStructured.set(commentAddr, structured);
-					// Set label
+					// Set label — mark as fixed so auto-generated names (e.g. FAR_XXXX
+					// from CPC RST handler) cannot overwrite a user-supplied name.
 					if (commentLabelName) {
 						this.setLabel(commentAddr, commentLabelName, NumberType.DATA_LBL);	// Data label might be changed to something else.
+						const lbl = this.labels.get(commentAddr);
+						if (lbl) lbl.isFixed = true;
 					}
 				}
 				// Next state
