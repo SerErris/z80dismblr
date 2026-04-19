@@ -302,61 +302,137 @@ The Z80 has three distinct address spaces that matter for labelling:
 |-------|-------|---------|
 | Code / memory | 0x0000–0xFFFF | `CALL`, `JP`, `LD HL,(addr)`, etc. |
 | Data / memory | 0x0000–0xFFFF | `LD A,(addr)`, `LD (addr),HL`, etc. |
-| I/O ports | 0x00–0xFF (8-bit) | `IN A,(n)`, `OUT (n),A` |
+| I/O ports | 0x0000–0xFFFF (full 16-bit on CPC) | `IN r,(C)`, `OUT (C),r`, `IN A,(n)`, `OUT (n),A` |
 
 **Memory (code + data)** are the same address space — a label is either
 a code label (`CODE_SUB`, `CODE_LBL`) or a data label (`DATA_LBL`) at
-the same 0-65535 range. The disassembler assigns the type automatically
-based on how the address is reached (call/jump → code; indirect load/
-store → data). Both already work in `--symbols` today.
+the same 0–65535 range. The disassembler assigns the type automatically.
+Both already work in `--symbols` today.
 
-**I/O ports** are a *separate address space*. Port `#FE` and memory
-address `#00FE` are completely different things. The opcode decoder
-already sets `valueType = PORT_LBL` on `IN A,(n)` / `OUT (n),A`, but
-the label creation step is currently unimplemented (a `TODO` in the
-existing code notes this explicitly).
+**I/O ports** are a *separate address space*. Port `#F4xx` and memory
+address `#F400` are completely different things.
 
-**Required changes to support port symbols:**
+##### CPC I/O is fully 16-bit with partial address decoding
 
-1. **Separate port label map** — add `portLabels: Map<number, DisLabel>`
-   alongside the existing `labels: Map<number, DisLabel>`. Keyed by the
-   8-bit port number (0–255 for direct `IN`/`OUT`).
+Unlike many simpler systems that use only the low 8 bits of the port
+address, the Amstrad CPC uses the **full 16-bit address bus** for I/O
+with **partial address decoding**. Each hardware device monitors only
+specific bits of the high byte; it responds whenever those bits match
+and ignores all other bits.
 
-2. **Symbol file syntax** — use a `port:` address prefix to distinguish
-   port addresses from memory addresses:
+```
+Port allocation rules (CPCWiki — Default I/O Port Summary):
+
+Device              R/W     b15 b14 b13 b12 b11 b10 b9  b8  b7..b0
+──────────────────────────────────────────────────────────────────────
+Gate Array          W only   0   1   -   -   -   -   -   -   --------
+PAL (RAM banking)   W only   0   *   -   -   -   -   -   -   --------
+CRTC 6845           R/W      -   0   -   -   -   -  r1  r0   --------
+Upper ROM select    W only   -   -   0   -   -   -   -   -   --------
+Printer port        W only   -   -   -   0   -   -   -   -   --------
+8255 PPI            R/W      -   -   -   -   0   -  r1  r0   --------
+Expansion periph.   R/W      -   -   -   -   -   0   x   x   xxxxxxxx
+
+Legend: 0 = bit must be 0 to select, - = ignored, r0/r1 = register sel
+```
+
+A consequence of partial decoding is that **multiple devices can be
+addressed simultaneously** by crafting an I/O address whose bits satisfy
+two devices' conditions at once. This is intentional CPC design, not a
+bug.
+
+The official canonical port addresses (high byte selects device, low
+byte often don't-care `XX`):
+
+| Official port | Decode pattern | Device / function |
+|--------------|---------------|-------------------|
+| `#7FXX` | `%01xxxxxx xxxxxxxx` | Gate Array (write) |
+| `#7FXX` | `%0xxxxxxx xxxxxxxx` | PAL / 128K RAM banking (write) |
+| `#BCXX` | `%x0xxxx00 xxxxxxxx` | CRTC index register (write) |
+| `#BDXX` | `%x0xxxx01 xxxxxxxx` | CRTC data out (write) |
+| `#BEXX` | `%x0xxxx10 xxxxxxxx` | CRTC status (read) |
+| `#BFXX` | `%x0xxxx11 xxxxxxxx` | CRTC data in (read) |
+| `#DFXX` | `%xx0xxxxx xxxxxxxx` | Upper ROM bank number (write) |
+| `#EFXX` | `%xxx0xxxx xxxxxxxx` | Printer port (write) |
+| `#F4XX` | `%xxxx0x00 xxxxxxxx` | 8255 PPI Port A — PSG data |
+| `#F5XX` | `%xxxx0x01 xxxxxxxx` | 8255 PPI Port B — Vsync/Tape/PrnBusy |
+| `#F6XX` | `%xxxx0x10 xxxxxxxx` | 8255 PPI Port C — keyboard row/PSG ctrl |
+| `#F7XX` | `%xxxx0x11 xxxxxxxx` | 8255 PPI control register |
+| `#F8FF` | (exact)             | Peripheral soft reset |
+| `#FA7E` | `%xxxxx0x0 0xxxxxxx` | Floppy motor control |
+| `#FB7E` | `%xxxxx0x1 0xxxxxx0` | FDC status register (read) |
+| `#FB7F` | `%xxxxx0x1 0xxxxxx1` | FDC data register (R/W) |
+
+##### Two Z80 I/O instruction forms and their labelling implications
+
+**`IN r,(C)` / `OUT (C),r`** — the full 16-bit port address is the
+value of the BC register pair. This is the primary form used in CPC
+firmware. The value of BC can often be traced statically from a
+preceding `LD BC,#xxxx`. When BC is a known constant at the point of
+the instruction, the disassembler can label the full 16-bit port.
+
+Example — `LD BC,#F640 : IN A,(C)` — port `#F640` selects the 8255
+PPI (b11=0 in `#F6`, b9=b8=10 → Port C) and reads keyboard row `#40`.
+
+**`IN A,(n)` / `OUT (n),A`** — the Z80 puts the **A register** in the
+high byte and the **8-bit immediate n** in the low byte. The effective
+16-bit port address is `(A << 8) | n`. Since A contains program data at
+runtime, the high byte (and therefore the device selection) is
+**runtime-dependent and cannot be determined by static analysis alone**.
+
+Example — `OUT (#7F),A` where A=`%01xxxxxx`: the effective port address
+is `(A << 8) | #7F`. The high byte equals A, which has b14=1 and b15=0 →
+Gate Array responds. The data being written to the Gate Array is encoded
+in A itself (the same byte). This is a clever hardware design feature
+where the data and the device-select bits occupy the same byte.
+
+For this form, the disassembler can only reliably label the **low byte**
+(`n`) and note that "the full 16-bit address depends on the value of A
+at runtime". Exact device labelling would require tracking A's value,
+which is a data-flow analysis problem beyond static disassembly.
+
+##### Required changes to support port symbols
+
+1. **Separate 16-bit port label map** — add
+   `portLabels: Map<number, DisLabel>` alongside
+   `labels: Map<number, DisLabel>`. Keyed by the full 16-bit port address
+   (0–65535), not the 8-bit `n` value from the opcode.
+
+2. **Symbol file syntax** — use a `port:` prefix with a 4-digit hex
+   16-bit address:
 
    ```
-   port:FE  KEYBOARD_ROW
-   port:7F  GATE_ARRAY
-   port:F4  PSG_READ
-   port:F5  PSG_WRITE_ADDR
-   port:F6  PSG_WRITE_DATA
+   port:7F00  GATE_ARRAY         ; b15=0, b14=1 in high byte
+   port:BC00  CRTC_INDEX         ; b14=0, b9=b8=00
+   port:F640  KEYBOARD_ROW_0     ; PPI Port C, row 0
+   port:F641  KEYBOARD_ROW_1     ; PPI Port C, row 1
+   port:F4xx  PPI_PORT_A         ; "xx" — don't-care low byte (future)
    ```
 
-3. **Label creation during analysis** — `setFoundLabel()` (called from
-   `disassembleForLabel()` when a `PORT_LBL` opcode is decoded) must
-   insert into `portLabels` rather than `labels`.
+   For `IN r,(C)` / `OUT (C),r` with a constant BC, the full 16-bit
+   canonical address is used directly. For `IN A,(n)` / `OUT (n),A`,
+   only the low byte (`n`) can be statically captured; the full
+   16-bit address is noted as partial.
 
-4. **Opcode formatter** — when formatting `IN A,(#FE)`, look up the
-   port number in `portLabels` and substitute the name if found, e.g.
-   `IN A,(KEYBOARD_ROW)`.
+3. **Label creation during analysis** — for `IN r,(C)` / `OUT (C),r`
+   where the preceding instruction loads BC with a constant, decode the
+   full 16-bit port and insert into `portLabels`. For `IN A,(n)` /
+   `OUT (n),A`, the 8-bit `n` is already decoded into `opcode.value`;
+   insert a tentative entry into `portLabels` with just the low byte
+   known, and flag it as "partial decode".
 
-5. **`--symbolsout`** — the `writeSymbolsOut` emitter should include a
-   section for discovered port addresses:
+4. **Opcode formatter** — look up `portLabels` when emitting an
+   `IN`/`OUT` instruction. If an exact 16-bit match exists, substitute
+   the label. If only a partial (8-bit `n`) match exists, annotate with
+   the label and a note that the high byte is runtime-dependent.
 
-   ```
-   ; --- discovered I/O ports ---
-   port:FE  PORT_FE
-   port:7F  PORT_7F
-   ```
-
-**`BC`-based port instructions** (`IN r,(C)`, `OUT (C),r`) use a 16-bit
-port address whose value is only known at runtime. These cannot be
-statically labelled — the disassembler emits them with no label
-substitution.
+5. **`--symbolsout`** — include a
+   `; --- discovered I/O ports ---` section using the `port:XXXX`
+   prefix for all ports encountered.
 
 **Implementation status:** data memory symbols — ✅ working today.
 I/O port symbols — ⬜ requires the changes above, none yet in place.
+This is tracked as a future TODO item (see `todo.md` item 3).
 
 `--symbols` is explicitly authored by the user and is **never written
 or modified by the disassembler**.
@@ -402,18 +478,40 @@ BB5D TXT_STR
 
 
 ; --- CPC I/O ports (port address space — separate from memory) --------------
-; Uses "port:XX" prefix to distinguish from memory addresses.
-; Requires the port-label feature described in §3.7.2.
-; IN A,(#FE) will render as  IN A,(KEYBOARD_ROW)  once implemented.
+; Uses "port:XXXX" (full 16-bit) prefix. On the CPC the full 16-bit address
+; bus is used with partial decoding; the HIGH BYTE selects the device.
+; Requires the port-label feature described in §3.7.2 (not yet implemented).
+; IN A,(C) with BC=#F640 will render as IN A,(KEYBOARD_ROW_0) once done.
+;
+; Best practice: use the canonical "official" port address with the high
+; byte that selects the device, low byte a typical firmware value.
 
-port:FE  KEYBOARD_ROW        ; read keyboard row selected by PPI port C
-port:7F  GATE_ARRAY          ; write gate array (mode, colour, ROM select)
-port:F4  PSG_READ            ; read AY-3-8912 PSG register data
-port:F5  PSG_WRITE_ADDR      ; write AY-3-8912 PSG register address
-port:F6  PSG_WRITE_DATA      ; write AY-3-8912 PSG register data
-port:FB  PPI_PORT_A          ; 8255 PPI port A — keyboard row select
-port:FA  PPI_PORT_C          ; 8255 PPI port C — keyboard scan / sound / ROM select
-port:F8  PPI_CONTROL         ; 8255 PPI control register
+port:7F00  GATE_ARRAY           ; b15=0, b14=1 → Gate Array (write)
+port:BC00  CRTC_INDEX           ; b14=0, b9=b8=00 → CRTC index (write)
+port:BD00  CRTC_DATA_OUT        ; b14=0, b9=b8=01 → CRTC data (write)
+port:BE00  CRTC_STATUS          ; b14=0, b9=b8=10 → CRTC status (read)
+port:BF00  CRTC_DATA_IN         ; b14=0, b9=b8=11 → CRTC data (read)
+port:DF00  UPPER_ROM_SELECT     ; b13=0 → upper ROM bank number (write)
+port:EF00  PRINTER_PORT         ; b12=0 → printer port data (write)
+port:F4FF  PPI_PORT_A           ; b11=0, b9=b8=00 → 8255 PPI Port A (PSG data)
+port:F5FF  PPI_PORT_B           ; b11=0, b9=b8=01 → 8255 PPI Port B (Vsync/Tape)
+port:F6FF  PPI_PORT_C           ; b11=0, b9=b8=10 → 8255 PPI Port C (kbd/PSG ctrl)
+port:F7FF  PPI_CONTROL          ; b11=0, b9=b8=11 → 8255 PPI control register
+port:FB7E  FDC_STATUS           ; FDC status register (read)
+port:FB7F  FDC_DATA             ; FDC data register (R/W)
+port:FA7E  FDC_MOTOR            ; floppy motor control (write)
+
+; Keyboard row ports (PPI Port C, IN r,(C) with BC = #F6xx, xx = row 0..15)
+port:F640  KEYBOARD_ROW_0
+port:F641  KEYBOARD_ROW_1
+port:F642  KEYBOARD_ROW_2
+port:F643  KEYBOARD_ROW_3
+port:F644  KEYBOARD_ROW_4
+port:F645  KEYBOARD_ROW_5
+port:F646  KEYBOARD_ROW_6
+port:F647  KEYBOARD_ROW_7
+port:F648  KEYBOARD_ROW_8
+port:F649  KEYBOARD_ROW_9
 
 
 ; --- RAM variables used by this ROM ------------------------------------------
