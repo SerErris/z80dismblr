@@ -1,4 +1,4 @@
-; ── EQU — external firmware addresses (not part of the binary) ───────────────
+; ── EQU — external addresses (not part of the binary) ───────────────
 
 BB5A TXT_OUTPUT
 
