@@ -294,17 +294,169 @@ can key by address, not by name.
   supported override path; the analyser always regenerates those fields
   from the `--out` auto-import).
 
-```
-; Known firmware and RAM symbols — maintained manually
-BB00: KL_CHOKE_OFF        ; firmware in another bank
-C000 cursor_x             ; RAM variable
-; summary: Print formatted string in HL
-; corrupted: A, HL, F     ; force-override: compiler-verified
-760A: sub_print_hl
-```
+#### 3.7.2 Symbol types: memory, data, and I/O ports
+
+The Z80 has three distinct address spaces that matter for labelling:
+
+| Space | Range | Used by |
+|-------|-------|---------|
+| Code / memory | 0x0000–0xFFFF | `CALL`, `JP`, `LD HL,(addr)`, etc. |
+| Data / memory | 0x0000–0xFFFF | `LD A,(addr)`, `LD (addr),HL`, etc. |
+| I/O ports | 0x00–0xFF (8-bit) | `IN A,(n)`, `OUT (n),A` |
+
+**Memory (code + data)** are the same address space — a label is either
+a code label (`CODE_SUB`, `CODE_LBL`) or a data label (`DATA_LBL`) at
+the same 0-65535 range. The disassembler assigns the type automatically
+based on how the address is reached (call/jump → code; indirect load/
+store → data). Both already work in `--symbols` today.
+
+**I/O ports** are a *separate address space*. Port `#FE` and memory
+address `#00FE` are completely different things. The opcode decoder
+already sets `valueType = PORT_LBL` on `IN A,(n)` / `OUT (n),A`, but
+the label creation step is currently unimplemented (a `TODO` in the
+existing code notes this explicitly).
+
+**Required changes to support port symbols:**
+
+1. **Separate port label map** — add `portLabels: Map<number, DisLabel>`
+   alongside the existing `labels: Map<number, DisLabel>`. Keyed by the
+   8-bit port number (0–255 for direct `IN`/`OUT`).
+
+2. **Symbol file syntax** — use a `port:` address prefix to distinguish
+   port addresses from memory addresses:
+
+   ```
+   port:FE  KEYBOARD_ROW
+   port:7F  GATE_ARRAY
+   port:F4  PSG_READ
+   port:F5  PSG_WRITE_ADDR
+   port:F6  PSG_WRITE_DATA
+   ```
+
+3. **Label creation during analysis** — `setFoundLabel()` (called from
+   `disassembleForLabel()` when a `PORT_LBL` opcode is decoded) must
+   insert into `portLabels` rather than `labels`.
+
+4. **Opcode formatter** — when formatting `IN A,(#FE)`, look up the
+   port number in `portLabels` and substitute the name if found, e.g.
+   `IN A,(KEYBOARD_ROW)`.
+
+5. **`--symbolsout`** — the `writeSymbolsOut` emitter should include a
+   section for discovered port addresses:
+
+   ```
+   ; --- discovered I/O ports ---
+   port:FE  PORT_FE
+   port:7F  PORT_7F
+   ```
+
+**`BC`-based port instructions** (`IN r,(C)`, `OUT (C),r`) use a 16-bit
+port address whose value is only known at runtime. These cannot be
+statically labelled — the disassembler emits them with no label
+substitution.
+
+**Implementation status:** data memory symbols — ✅ working today.
+I/O port symbols — ⬜ requires the changes above, none yet in place.
 
 `--symbols` is explicitly authored by the user and is **never written
 or modified by the disassembler**.
+
+#### Example `--symbols` file
+
+```
+; =============================================================================
+; symbols.sym — curated symbol database for my_extension.rom
+; =============================================================================
+
+
+; --- CPC lower-ROM firmware entry points (BBxx range) -----------------------
+; These are not part of the ROM being disassembled; the disassembler cannot
+; discover them on its own. Labels here are applied whenever a CALL or JP
+; in the ROM targets one of these addresses.
+
+; summary: Initialise the key manager and expansion buffer
+; entry:   HL = address of expansion buffer
+;          BC = length of expansion buffer
+; exit-success: Carry set
+; exit-failure: Carry clear (buffer too small)
+; corrupted: A, BC, DE, HL, F
+; preserved: IX, IY
+BB00 KL_CHOKE_OFF
+
+; summary: Scan keyboard and return key code
+; entry:   —
+; exit-success: A = key code, Carry set
+; exit-failure: Carry clear (no key)
+; corrupted: AF, BC, DE, HL
+BB03 KL_SCAN_OVER
+
+; summary: Output a character to the lower screen
+; entry:   A = ASCII character code
+; corrupted: AF, BC, DE, HL, IX
+BB5A TXT_OUTPUT
+
+; summary: Print a null-terminated string to the lower screen
+; entry:   HL = address of string (null-terminated)
+; corrupted: AF, BC, DE, HL
+BB5D TXT_STR
+
+
+; --- CPC I/O ports (port address space — separate from memory) --------------
+; Uses "port:XX" prefix to distinguish from memory addresses.
+; Requires the port-label feature described in §3.7.2.
+; IN A,(#FE) will render as  IN A,(KEYBOARD_ROW)  once implemented.
+
+port:FE  KEYBOARD_ROW        ; read keyboard row selected by PPI port C
+port:7F  GATE_ARRAY          ; write gate array (mode, colour, ROM select)
+port:F4  PSG_READ            ; read AY-3-8912 PSG register data
+port:F5  PSG_WRITE_ADDR      ; write AY-3-8912 PSG register address
+port:F6  PSG_WRITE_DATA      ; write AY-3-8912 PSG register data
+port:FB  PPI_PORT_A          ; 8255 PPI port A — keyboard row select
+port:FA  PPI_PORT_C          ; 8255 PPI port C — keyboard scan / sound / ROM select
+port:F8  PPI_CONTROL         ; 8255 PPI control register
+
+
+; --- RAM variables used by this ROM ------------------------------------------
+; Persistent state stored in RAM by the extension ROM at known offsets.
+
+; summary: Current X cursor position (0-79)
+C000 cursor_x
+
+; summary: Current Y cursor position (0-24)
+C001 cursor_y
+
+; summary: Output mode flags (bit 0 = inverse, bit 1 = underline)
+C002 output_flags
+
+; summary: Pointer to current string being rendered (16-bit)
+C003 str_ptr
+
+
+; --- Subroutines within this ROM — structured documentation ------------------
+; These addresses ARE in the binary being disassembled. Entries here provide
+; documentation that the static analyser cannot infer, and can force-override
+; the register analysis when a subroutine has been manually verified.
+
+; summary: Print a formatted text string in HL
+; action: Reads bytes from (HL). Control codes:
+;         FEh followed by 2 bytes = 16-bit integer
+;         FDh followed by 2 bytes = pointer to sub-string (recursive)
+;         FFh = end of string
+; entry:  HL = pointer to formatted string
+; exit-success: HL advanced past terminator
+; exit-failure: —
+; corrupted: A, HL, F
+; preserved: BC, DE, IX, IY
+760A sub_print_hl
+
+; summary: Compute BCD-formatted decimal from binary value in DE
+; entry:   DE = binary value (0-9999)
+;          HL = output buffer address (5 bytes minimum)
+; exit-success: HL points past the last digit written
+; corrupted: AF, BC, DE, HL
+; preserved: IX, IY
+7680 sub_bcd_convert
+```
 
 **`--out <file>`** (existing) is the disassembly write path.
 `--out` is already defined in the codebase; the only new behaviour is
