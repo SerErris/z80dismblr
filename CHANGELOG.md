@@ -1,3 +1,43 @@
+## 2.1.0
+- Stream A: round-trip comment preservation — annotations in the `.asm` output file are automatically re-imported on the next run.
+- Line classifier (`asmClassifier.ts`) produces a typed event stream from any `.asm` file; each line is classified independently.
+- Banner blocks (open rule, name, structured fields, close rule) are recognised and decoded on re-read.
+- Structured fields (`Summary:`, `Action:`, `Entry:`, `Exit (success/failure):`) are imported back into the disassembler state; multi-line continuation blocks supported.
+- `—` sentinel: a field value of `—` means "not yet documented" and is ignored on re-import; any other value is preserved.
+- Label renaming: if a label name in the `.asm` file does not match the auto-generated pattern it is locked in as a fixed label (`isFixed`) that survives re-numbering.
+- Pre-label and pre-instruction comments (`linesBefore`) are captured and re-emitted on the next run; blank lines reset the buffer.
+- Auto-import rule: if `--out foo.asm` already exists it is automatically fed through the round-trip parser before analysis — no extra flag required.
+- Auto-generated label suffixes are zero-padded to a minimum of three digits (`SUB001`, `LBL042`, …), widening dynamically when the count exceeds 999.
+- Idempotence harness (A7): `disassemble → emit → re-disassemble → emit` is enforced to produce byte-identical output by a dedicated test suite.
+- Orphaned annotation handling (A8): annotations for addresses no longer present in the binary are preserved at the top of the `.asm` file in a `;;`-prefixed machine-readable block rather than silently dropped.
+- Orphan blocks are stable across multiple round trips and only emitted when actual user data exists.
+- Inline instruction comments (A9): text after `;;` on an instruction line is user-owned and survives the round trip; text before `;;` is auto-generated and regenerated each run.
+- `suppressAuto` mode: if no `;` auto-comment precedes `;;`, the emitter omits the auto-generated comment entirely.
+- `--symbolsout` skeleton emitter (A10): writes a `--symbols`-ready file with named labels, structured-field placeholders for subroutines, and no auto-generated prose.
+- Fixed stale `--commentsout` reference in `--argsout` help text.
+
+
+## 2.0.0
+- Firmware-style subroutine header banners: each subroutine is preceded by a structured 15–19 line block containing address, size, instruction count, cyclomatic complexity, type, summary, action, entry/exit conditions, corrupted/preserved registers, caller list, and callee list.
+- Register analysis engine (`reganalyzer.ts`): static dataflow analysis determines which registers each subroutine reads, writes, and preserves.
+- `Corrupted:` and `Preserved:` fields are auto-populated from the register analyser; `—` is used when analysis is unavailable.
+- `--cpc` flag: activates Amstrad CPC firmware RST dispatch decoding; RST 1 and RST 2 opcodes are decoded as 1-byte or 3-byte firmware calls with named targets resolved from `--symbols`.
+- `--cpc` and `--opcode` (user opcode extensions) are mutually exclusive.
+- `--comments` / `--commentsout` renamed to `--symbols` / `--symbolsout`; `--symbolsout` now emits a clean skeleton file (named labels only, no prose).
+- `--argsout` writes a complete merged args file (all input options plus auto-discovered data ranges) for re-use as `--args` input.
+- `--hexformat` option (`intel` / `intel0` / `cpc` / `z80` / `c`) applied universally to all hex output.
+- `--cleanout file`: emits an assembleable source file stripped of all commentary, suitable for direct input to `sjasmplus` or `maxam`.
+- `--cleanout-format sjasmplus|maxam`: selects the assembler dialect.
+- `--cleanout-hex`: overrides the hex literal style per dialect.
+- Data bytes are grouped in clean output: up to 8 per `defb` line; zero-fill runs of 16 or more bytes emit a `defs` directive.
+- Invalid opcodes in clean output are emitted as raw `defb` bytes; custom `--opcode` extensions are split back into instruction plus trailing `defb`.
+- CPC RST 3-byte opcodes in clean output emit `rst` plus `defw` target (active only with `--cpc`).
+- Label name collision with assembler reserved words is a hard error in clean output.
+- ZX Next opcodes targeting the maxam dialect are refused with a clear error message.
+- EQU prologue emitted for all external symbols before any code in clean output.
+- CI golden-file regression tests lock in both sjasmplus and maxam dialect outputs.
+
+
 ## 1.6.0
 - Opcodes refactored and fixed.
 - Testcases added for all opcodes.

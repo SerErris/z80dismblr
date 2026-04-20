@@ -1,5 +1,5 @@
 import { Disassembler } from './disassembler/disasm';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { Opcode, Opcodes } from './disassembler/opcode';
 import { writeArgsOut, writeSymbolsOut } from './disassembler/argsWriter';
 import { Format, HexFormat } from './disassembler/format';
@@ -96,6 +96,12 @@ class Startup {
             // Lower case opcodes?
             if(this.dasm.opcodesLowerCase)
                 Opcode.makeLowerCase();
+
+            // Auto-import the existing --out file for round-trip annotations
+            // (§3.7.1). Runs before --symbols so that explicitly authored
+            // --symbols entries take precedence over the auto-import.
+            if (this.outPath && existsSync(this.outPath))
+                this.dasm.setAddressCommentsFromAsm(this.outPath);
 
             // infile with comments for the labels
             if(this.commentsPath)
@@ -425,7 +431,7 @@ z80dismblr [options]
             in --args format. Includes entries from --datarange as well as any ranges
             found automatically during disassembly (e.g. FAR CALL pointer tables in
             --cpc mode). Review the file before feeding it back as --args input on a
-            subsequent run. Use --commentsout for discovered labels.
+            subsequent run. Use --symbolsout for discovered labels.
             Example: --argsout discovered.args
 
         --symbolsout file: After disassembly, write a skeleton symbol file
@@ -896,6 +902,7 @@ z80dismblr [options]
                         throw arg + ': No path given.';
                     }
                     break;
+
 
 
                 // Flow-Charts:

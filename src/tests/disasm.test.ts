@@ -179,38 +179,38 @@ suite('Disassembler', () => {
 /*4002*/					// START2:
 /*4002*/ 0x28, 0xfe,		//     jr z,START2
 /*4004*/ 0xda, 0x02, 0x40,	// 	   jp c,START2
-/*4007*/					// LBL1:
+/*4007*/					// LBL001:
 /*4007*/ 0x00,				//     nop
-/*4008*/ 0x10, 0xfd,		//     djnz LBL1
-/*400a*/					// LBL2:
-/*400a*/ 0x30, 0xfe,		//     jr nc,LBL2
+/*4008*/ 0x10, 0xfd,		//     djnz LBL001
+/*400a*/					// LBL002:
+/*400a*/ 0x30, 0xfe,		//     jr nc,LBL002
 /*400c*/ 0xca, 0x02, 0x40,	// 	   jp z,START2
 /*400f*/ 0x00,				//     nop
-/*4010*/ 0xcd, 0x1a, 0x40,	// 	   call SUB1
+/*4010*/ 0xcd, 0x1a, 0x40,	// 	   call SUB001
 /*4013*/ 0xc9,				//     ret
 /*4014*/ 0x00,				//     nop
-/*4015*/					// SUB2:
-/*4015*/ 0x28, 0x01,		//     jr z,LBL3
+/*4015*/					// SUB002:
+/*4015*/ 0x28, 0x01,		//     jr z,LBL003
 /*4017*/ 0x00,				//     nop
-/*4018*/					// LBL3:
+/*4018*/					// LBL003:
 /*4018*/ 0xc9,				//     ret
 /*4019*/ 0x00,				//     nop
-/*401a*/					// SUB1:
-/*401a*/ 0x3a, 0x0a, 0x40,	//	   ld a,(LBL2)
+/*401a*/					// SUB001:
+/*401a*/ 0x3a, 0x0a, 0x40,	//	   ld a,(LBL002)
 /*401d*/ 0xc8,				//     ret z
 /*401e*/ 0x0e, 0x02,		//     ld c,2
-/*4020*/ 0x20, 0xf6,		//     jr nz,LBL3
+/*4020*/ 0x20, 0xf6,		//     jr nz,LBL003
 /*4022*/ 0x06, 0x05,		//     ld b,5
 /*4024*/ 0x21, 0x03, 0x00,	//     ld hl,3
-/*4027*/ 0x32, 0x36, 0x40,	//     ld (DATA1),a
+/*4027*/ 0x32, 0x36, 0x40,	//     ld (DATA001),a
 /*402a*/ 0x3a, 0x00, 0x50,	//     ld a,(0x5000)
 /*402d*/ 0xca, 0x00, 0x51,	//     jp z,0x5100 ; Jump to unassigned memory is treated as a CALL
 /*4030*/ 0xc9,				//     ret
 /*4031*/ 0x00,				//     nop
-/*4032*/					// LBL4:
+/*4032*/					// LBL004:
 /*4032*/ 0x00,				//     nop
-/*4033*/ 0xc3, 0x32, 0x40,	//     jp LBL4
-/*4036*/					// DATA1:
+/*4033*/ 0xc3, 0x32, 0x40,	//     jp LBL004
+/*4036*/					// DATA001:
 /*4036*/ 0x00				//     defb 0
 			];
 
@@ -389,7 +389,7 @@ suite('Disassembler', () => {
 			let label;
 
 			label = dasm.labels.get(0x6000);
-			assert(label.name == 'BSUB1');
+			assert(label.name == 'BSUB001');
 			assert(label.isEqu == false);
 
 			const addrParents = dasm.addressParents;
@@ -431,11 +431,11 @@ suite('Disassembler', () => {
 			assert(dasm.labels.size == 2);
 
 			const label1 = dasm.labels.get(org);
-			assert(label1.name == 'BSUB1');
+			assert(label1.name == 'BSUB001');
 			assert(label1.isEqu == false);
 
 			const label2 = dasm.labels.get(org + 6);
-			assert(label2.name == '.bsub1_lbl');
+			assert(label2.name == '.bsub001_lbl');
 			assert(label2.isEqu == false);
 			assert(label2.type == NumberType.CODE_LOCAL_LBL);
 
@@ -496,33 +496,33 @@ suite('Disassembler', () => {
 			let label;
 
 			label = dasm.labels.get(0x6000);
-			assert(label.name == 'BSUB1');
+			assert(label.name == 'BSUB001');
 			assert(label.isEqu == false);
 
 			label = dasm.labels.get(0x6003);
-			assert(label.name == '.bsub1_lbl1');
+			assert(label.name == '.bsub001_lbl1');
 			assert(label.isEqu == false);
 
 			label = dasm.labels.get(0x6006);
-			assert(label.name == '.bsub1_lbl2');
+			assert(label.name == '.bsub001_lbl2');
 
 			label = dasm.labels.get(0x6009);
-			assert(label.name == '.bsub1_lbl3');
+			assert(label.name == '.bsub001_lbl3');
 
 			label = dasm.labels.get(0x6015);
-			assert(label.name == '.bsub1_lbl4');
+			assert(label.name == '.bsub001_lbl4');
 
 			label = dasm.labels.get(0x6018);
-			assert(label.name == '.bsub1_lbl5');
+			assert(label.name == '.bsub001_lbl5');
 
 			label = dasm.labels.get(0x6019);
-			assert(label.name == 'BDATA1');
+			assert(label.name == 'BDATA001');
 
 			label = dasm.labels.get(0x601a);
-			assert(label.name == 'BDATA2');
+			assert(label.name == 'BDATA002');
 
 			label = dasm.labels.get(0x601b);
-			assert(label.name == 'BDATA3');
+			assert(label.name == 'BDATA003');
 		});
 
 
@@ -574,37 +574,37 @@ suite('Disassembler', () => {
 			let label;
 
 			label = dasm.labels.get(0x7000);
-			assert(label.name == 'CSUB1');
+			assert(label.name == 'CSUB001');
 			assert(label.isEqu == false);
 
 			label = dasm.labels.get(0x7002);
-			assert(label.name == '.csub1_lbl1');
+			assert(label.name == '.csub001_lbl1');
 			assert(label.isEqu == false);
 
 			label = dasm.labels.get(0x7004);
-			assert(label.name == '.csub1_lbl2');
+			assert(label.name == '.csub001_lbl2');
 			assert(label.isEqu == false);
 
 			label = dasm.labels.get(0x7005);
-			assert(label.name == '.csub1_loop');
+			assert(label.name == '.csub001_loop');
 
 			label = dasm.labels.get(0x700B);
-			assert(label.name == 'CSUB2');
+			assert(label.name == 'CSUB002');
 
 			label = dasm.labels.get(0x700d);
-			assert(label.name == '.csub2_lbl1');
+			assert(label.name == '.csub002_lbl1');
 
 			label = dasm.labels.get(0x700f);
-			assert(label.name == '.csub2_lbl2');
+			assert(label.name == '.csub002_lbl2');
 
 			label = dasm.labels.get(0x7010);
-			assert(label.name == '.csub2_loop1');
+			assert(label.name == '.csub002_loop1');
 
 			label = dasm.labels.get(0x7012);
-			assert(label.name == '.csub2_loop2');
+			assert(label.name == '.csub002_loop2');
 
 			label = dasm.labels.get(0x7015);
-			assert(label.name == 'CCODE1');
+			assert(label.name == 'CCODE001');
 		});
 	});
 
@@ -686,7 +686,7 @@ suite('Disassembler', () => {
 				0x0D, "DEC C",
 				0x0E, 0x0A, "LD C,0Ah",
 				0x0F, "RRCA",
-				0x10, 0xFD, "DJNZ .sub2_loop",
+				0x10, 0xFD, "DJNZ .sub002_loop",
 				0x11, 0x12, 0x34, "LD DE,3412h",
 				0x12, "LD (DE),A",
 				0x13, "INC DE",
@@ -694,7 +694,7 @@ suite('Disassembler', () => {
 				0x15, "DEC D",
 				0x16, 0x0A, "LD D,0Ah",
 				0x17, "RLA",
-				0x18, 0x00, "JR .sub2_lbl1",
+				0x18, 0x00, "JR .sub002_lbl1",
 				0x19, "ADD HL,DE",
 				0x1A, "LD A,(DE)",
 				0x1B, "DEC DE",
@@ -702,33 +702,33 @@ suite('Disassembler', () => {
 				0x1D, "DEC E",
 				0x1E, 0x0A, "LD E,0Ah",
 				0x1F, "RRA",
-				0x20, 0x03, "JR NZ,.sub2_lbl2",
+				0x20, 0x03, "JR NZ,.sub002_lbl2",
 				0x21, 0x12, 0x34, "LD HL,3412h",
-				0x22, 0x12, 0x34, "LD (DATA2),HL",
+				0x22, 0x12, 0x34, "LD (DATA002),HL",
 				0x23, "INC HL",
 				0x24, "INC H",
 				0x25, "DEC H",
 				0x26, 0x0A, "LD H,0Ah",
 				0x27, "DAA",
-				0x28, 0x01, "JR Z,.sub2_lbl3",
+				0x28, 0x01, "JR Z,.sub002_lbl3",
 				0x29, "ADD HL,HL",
-				0x2A, 0x12, 0x34, "LD HL,(DATA2)",
+				0x2A, 0x12, 0x34, "LD HL,(DATA002)",
 				0x2B, "DEC HL",
 				0x2C, "INC L",
 				0x2D, "DEC L",
 				0x2E, 0x0A, "LD L,0Ah",
 				0x2F, "CPL",
-				0x30, 0x03, "JR NC,.sub2_lbl4",
-				0x31, 0x12, 0x34, "LD SP,DATA2",
-				0x32, 0x12, 0x34, "LD (DATA2),A",
+				0x30, 0x03, "JR NC,.sub002_lbl4",
+				0x31, 0x12, 0x34, "LD SP,DATA002",
+				0x32, 0x12, 0x34, "LD (DATA002),A",
 				0x33, "INC SP",
 				0x34, "INC (HL)",
 				0x35, "DEC (HL)",
 				0x36, 0x0A, "LD (HL),0Ah",
 				0x37, "SCF",
-				0x38, 0x01, "JR C,.sub2_lbl5",
+				0x38, 0x01, "JR C,.sub002_lbl5",
 				0x39, "ADD HL,SP",
-				0x3A, 0x12, 0x34, "LD A,(DATA2)",
+				0x3A, 0x12, 0x34, "LD A,(DATA002)",
 				0x3B, "DEC SP",
 				0x3C, "INC A",
 				0x3D, "DEC A",
@@ -864,62 +864,62 @@ suite('Disassembler', () => {
 				0xBF, "CP A",
 				0xC0, "RET NZ",
 				0xC1, "POP BC",
-				0xC2, 0xE6, 0x10, "JP NZ,.sub2_lbl6",
-				0xC3, 0xEF, 0x10, "JP .sub2_lbl7",
-/* 10E6h */		0xC4, 0x04, 0x10, "CALL NZ,SUB2",
+				0xC2, 0xE6, 0x10, "JP NZ,.sub002_lbl6",
+				0xC3, 0xEF, 0x10, "JP .sub002_lbl7",
+/* 10E6h */		0xC4, 0x04, 0x10, "CALL NZ,SUB002",
 				0xC5, "PUSH BC",
 				0xC6, 0x0A, "ADD A,0Ah",
 				0xC7, "RST 00h",
 				0xC8, "RET Z",
 				0xC9, "RET",
-/* 10EFh */		0xCA, 0x04, 0x10, "JP Z,SUB2",
-				0xCC, 0x04, 0x10, "CALL Z,SUB2",
-				0xCD, 0x04, 0x10, "CALL SUB2",
+/* 10EFh */		0xCA, 0x04, 0x10, "JP Z,SUB002",
+				0xCC, 0x04, 0x10, "CALL Z,SUB002",
+				0xCD, 0x04, 0x10, "CALL SUB002",
 				0xCE, 0x0A, "ADC A,0Ah",
 				0xCF, "RST 08h",
 				0xD0, "RET NC",
 				0xD1, "POP DE",
-				0xD2, 0x04, 0x10, "JP NC,SUB2",
+				0xD2, 0x04, 0x10, "JP NC,SUB002",
 				0xD3, 0x0A, "OUT (000Ah),A",
-				0xD4, 0x04, 0x10, "CALL NC,SUB2",
+				0xD4, 0x04, 0x10, "CALL NC,SUB002",
 				0xD5, "PUSH DE",
 				0xD6, 0x0A, "SUB 0Ah",
 				0xD7, "RST 10h",
 				0xD8, "RET C",
 				0xD9, "EXX",
-				0xDA, 0x04, 0x10, "JP C,SUB2",
+				0xDA, 0x04, 0x10, "JP C,SUB002",
 				0xDB, 0x0A, "IN A,(000Ah)",
-				0xDC, 0x04, 0x10, "CALL C,SUB2",
+				0xDC, 0x04, 0x10, "CALL C,SUB002",
 				0xDE, 0x0A, "SBC A,0Ah",
 				0xDF, "RST 18h",
 				0xE0, "RET PO",
 				0xE1, "POP HL",
-				0xE2, 0x04, 0x10, "JP PO,SUB2",
+				0xE2, 0x04, 0x10, "JP PO,SUB002",
 				0xE3, "EX (SP),HL",
-				0xE4, 0x25, 0x11, "CALL PO,SUB3",
+				0xE4, 0x25, 0x11, "CALL PO,SUB003",
 				0xE5, "PUSH HL",
 				0xE6, 0x0A, "AND 0Ah",
 				0xE7, "RST 20h",
 				0xE8, "RET PE",
 				0xE9, "JP (HL)",
-/* 1125h */		0xEA, 0x04, 0x10, "JP PE,SUB2",
+/* 1125h */		0xEA, 0x04, 0x10, "JP PE,SUB002",
 				0xEB, "EX DE,HL",
-				0xEC, 0x04, 0x10, "CALL PE,SUB2",
+				0xEC, 0x04, 0x10, "CALL PE,SUB002",
 				0xEE, 0x0A, "XOR 0Ah",
 				0xEF, "RST 28h",
 				0xF0, "RET P",
 				0xF1, "POP AF",
-				0xF2, 0x04, 0x10, "JP P,SUB2",
+				0xF2, 0x04, 0x10, "JP P,SUB002",
 				0xF3, "DI",
-				0xF4, 0x04, 0x10, "CALL P,SUB2",
+				0xF4, 0x04, 0x10, "CALL P,SUB002",
 				0xF5, "PUSH AF",
 				0xF6, 0x0A, "OR 0Ah",
 				0xF7, "RST 30h",
 				0xF8, "RET M",
 				0xF9, "LD SP,HL",
-				0xFA, 0x04, 0x10, "JP M,SUB2",
+				0xFA, 0x04, 0x10, "JP M,SUB002",
 				0xFB, "EI",
-				0xFC, 0x04, 0x10, "CALL M,SUB2",
+				0xFC, 0x04, 0x10, "CALL M,SUB002",
 				0xFE, 0x0A, "CP 0Ah",
 				0xFF, "RST 38h"
 			];
@@ -1003,7 +1003,7 @@ suite('Disassembler', () => {
 				0xED, 0x40, "IN B,(C)",
 				0xED, 0x41, "OUT (C),B",
 				0xED, 0x42, "SBC HL,BC",
-				0xED, 0x43, 0x12, 0x34, "LD (DATA1),BC",
+				0xED, 0x43, 0x12, 0x34, "LD (DATA001),BC",
 				0xED, 0x44, "NEG",
 
 				0x28, 0x02, "",	//  To overcome next disassembly stopping instruction
@@ -1014,7 +1014,7 @@ suite('Disassembler', () => {
 				0xED, 0x48, "IN C,(C)",
 				0xED, 0x49, "OUT (C),C",
 				0xED, 0x4A, "ADC HL,BC",
-				0xED, 0x4B, 0x12, 0x34, "LD BC,(DATA1)",
+				0xED, 0x4B, 0x12, 0x34, "LD BC,(DATA001)",
 				0xED, 0x4C, "[neg]",
 
 				0x28, 0x02, "",	//  To overcome next disassembly stopping instruction
@@ -1025,7 +1025,7 @@ suite('Disassembler', () => {
 				0xED, 0x50, "IN D,(C)",
 				0xED, 0x51, "OUT (C),D",
 				0xED, 0x52, "SBC HL,DE",
-				0xED, 0x53, 0x12, 0x34, "LD (DATA1),DE",
+				0xED, 0x53, 0x12, 0x34, "LD (DATA001),DE",
 				0xED, 0x54, "[neg]",
 				0xED, 0x55, "[retn]",
 				0xED, 0x56, "IM 1",
@@ -1033,7 +1033,7 @@ suite('Disassembler', () => {
 				0xED, 0x58, "IN E,(C)",
 				0xED, 0x59, "OUT (C),E",
 				0xED, 0x5A, "ADC HL,DE",
-				0xED, 0x5B, 0x12, 0x34, "LD DE,(DATA1)",
+				0xED, 0x5B, 0x12, 0x34, "LD DE,(DATA001)",
 				0xED, 0x5C, "[neg]",
 				0xED, 0x5D, "[reti]",
 				0xED, 0x5E, "IM 2",
@@ -1041,7 +1041,7 @@ suite('Disassembler', () => {
 				0xED, 0x60, "IN H,(C)",
 				0xED, 0x61, "OUT (C),H",
 				0xED, 0x62, "SBC HL,HL",
-				0xED, 0x63, 0x12, 0x34, "LD (DATA1),HL",
+				0xED, 0x63, 0x12, 0x34, "LD (DATA001),HL",
 				0xED, 0x64, "[neg]",
 				0xED, 0x65, "[retn]",
 				0xED, 0x66, "[im0]",
@@ -1049,7 +1049,7 @@ suite('Disassembler', () => {
 				0xED, 0x68, "IN L,(C)",
 				0xED, 0x69, "OUT (C),L",
 				0xED, 0x6A, "ADC HL,HL",
-				0xED, 0x6B, 0x12, 0x34, "LD HL,(DATA1)",
+				0xED, 0x6B, 0x12, 0x34, "LD HL,(DATA001)",
 				0xED, 0x6C, "[neg]",
 				0xED, 0x6D, "[reti]",
 				0xED, 0x6E, "[im0]",
@@ -1057,7 +1057,7 @@ suite('Disassembler', () => {
 				0xED, 0x70, "IN F,(C)",
 				0xED, 0x71, "OUT (C),F",
 				0xED, 0x72, "SBC HL,SP",
-				0xED, 0x73, 0x12, 0x34, "LD (DATA1),SP",
+				0xED, 0x73, 0x12, 0x34, "LD (DATA001),SP",
 				0xED, 0x74, "[neg]",
 				0xED, 0x75, "[retn]",
 				0xED, 0x76, "[im1]",
@@ -1065,7 +1065,7 @@ suite('Disassembler', () => {
 				0xED, 0x78, "IN A,(C)",
 				0xED, 0x79, "OUT (C),A",
 				0xED, 0x7A, "ADC HL,SP",
-				0xED, 0x7B, 0x12, 0x34, "LD SP,(DATA1)",
+				0xED, 0x7B, 0x12, 0x34, "LD SP,(DATA001)",
 				0xED, 0x7C, "[neg]",
 				0xED, 0x7D, "[reti]",
 				0xED, 0x7E, "[im2]",
@@ -1528,13 +1528,13 @@ suite('Disassembler', () => {
 				0xDD, 0x1F, "INVALID INSTRUCTION",
 				0xDD, 0x20, "INVALID INSTRUCTION",
 				0xDD, 0x21, 0x12, 0x34, "LD IX,3412h",
-				0xDD, 0x22, 0x12, 0x34, "LD (DATA1),IX",
+				0xDD, 0x22, 0x12, 0x34, "LD (DATA001),IX",
 				0xDD, 0x23, "INC IX",
 				0xDD, 0x24, "INC IXH",
 				0xDD, 0x25, "DEC IXH",
 				0xDD, 0x26, 0x0A, "LD IXH,0Ah",
 				0xDD, 0x29, "ADD IX,IX",
-				0xDD, 0x2A, 0x12, 0x34, "LD IX,(DATA1)",
+				0xDD, 0x2A, 0x12, 0x34, "LD IX,(DATA001)",
 				0xDD, 0x2B, "DEC IX",
 				0xDD, 0x2C, "INC IXL",
 				0xDD, 0x2D, "DEC IXL",
@@ -2056,13 +2056,13 @@ suite('Disassembler', () => {
 				0xFD, 0x1F, "INVALID INSTRUCTION",
 				0xFD, 0x20, "INVALID INSTRUCTION",
 				0xFD, 0x21, 0x12, 0x34, "LD IY,3412h",
-				0xFD, 0x22, 0x12, 0x34, "LD (DATA1),IY",
+				0xFD, 0x22, 0x12, 0x34, "LD (DATA001),IY",
 				0xFD, 0x23, "INC IY",
 				0xFD, 0x24, "INC IYH",
 				0xFD, 0x25, "DEC IYH",
 				0xFD, 0x26, 0x0A, "LD IYH,0Ah",
 				0xFD, 0x29, "ADD IY,IY",
-				0xFD, 0x2A, 0x12, 0x34, "LD IY,(DATA1)",
+				0xFD, 0x2A, 0x12, 0x34, "LD IY,(DATA001)",
 				0xFD, 0x2B, "DEC IY",
 				0xFD, 0x2C, "INC IYL",
 				0xFD, 0x2D, "DEC IYL",
@@ -2744,12 +2744,12 @@ suite('Disassembler', () => {
 			//assert(linesUntrimmed[5] == 'SELF_MOD1:'); // Depends on priority
 			//assert(lines[3] == 'LD (SELF_MOD1+1),HL');
 			// Position-independent: the new firmware-style banner made
-			// the raw-line indexes unstable. The SUB1: label and the
-			// self-modifying reference to SUB1+1 must still appear.
-			assert(linesUntrimmed.some((l: string) => l === 'SUB1:'),
-				'SUB1: label must appear in the disassembly');
-			assert(lines.some((l: string) => l === 'LD (SUB1+1),HL'),
-				'self-modifying LD must reference SUB1+1');
+			// the raw-line indexes unstable. The SUB001: label and the
+			// self-modifying reference to SUB001+1 must still appear.
+			assert(linesUntrimmed.some((l: string) => l === 'SUB001:'),
+				'SUB001: label must appear in the disassembly');
+			assert(lines.some((l: string) => l === 'LD (SUB001+1),HL'),
+				'self-modifying LD must reference SUB001+1');
 			assert(linesUntrimmed.some((l: string) => l.indexOf('WARNING') >= 0),
 				'WARNING comment about self-modifying code must appear');
 		});
@@ -2773,8 +2773,8 @@ suite('Disassembler', () => {
 
 			//dasm.printLabels();
 
-			assert(linesUntrimmed[4] == 'LBL1:');
-			assert(lines[2] == 'JP LBL1+1');
+			assert(linesUntrimmed[4] == 'LBL001:');
+			assert(lines[2] == 'JP LBL001+1');
 			assert(linesUntrimmed[6].indexOf("WARNING") >= 0);
 		});
 
@@ -3016,12 +3016,12 @@ suite('Disassembler', () => {
 
 		test('findInterruptLabels 2', () => {
 			const memory1 = [
-				//8000 SUB2:
+				//8000 SUB002:
 				/*8000*/ 0x3E, 0x040,	//     	ld   a,4
 				/*8002*/ 0xC9,           	//		ret
 			];
 			const memory2 = [
-				//9000 SUB2:
+				//9000 SUB002:
 				/*9000*/ 0x80,           	//		add  a,b
 				/*9001*/ 0xC9,           	//		ret
 			];
@@ -3073,18 +3073,18 @@ suite('Disassembler', () => {
 
 		test('addFlowThroughReferences', () => {
 			const memory = [
-				//8000 SUB1:
+				//8000 SUB001:
 				/*8000*/ 0x3E, 0x22,	//   LD   A,34
 				/*8002*/ 0x3E, 0x01,	//   LD   A,01
 
-				//8004 SUB2: <- This should become referenced by SUB1
+				//8004 SUB002: <- This should become referenced by SUB001
 				/*8004*/ 0x3E, 0x21,	//   LD   A,33
 				/*8006*/ 0xC9,     		//	 RET
 
-				// This is here to make sure that SUB1/2 labels are created.
+				// This is here to make sure that SUB001/2 labels are created.
 				//8007 START:
-				/*8007*/ 0xCD, 0x00, 0x80,//	 CALL SUB1
-				/*800A*/ 0xCD, 0x04, 0x80,//	 CALL SUB2
+				/*8007*/ 0xCD, 0x00, 0x80,//	 CALL SUB001
+				/*800A*/ 0xCD, 0x04, 0x80,//	 CALL SUB002
 				/*800D*/ 0xC9,     		//	 RET
 			];
 
@@ -3116,19 +3116,19 @@ suite('Disassembler', () => {
 		// Same as before but changes order of 'setFixedCodeLabel'
 		test('addFlowThroughReferences changed order', () => {
 			const memory = [
-				//8000 SUB1:
+				//8000 SUB001:
 				/*8000*/ 0x3E, 0x22,	//   LD   A,34
 				/*8002*/ 0x3E, 0x01,	//   LD   A,01
 
 
-				//8004 SUB2: <- This should become referenced by SUB1
+				//8004 SUB002: <- This should become referenced by SUB001
 				/*8004*/ 0x3E, 0x21,	//   LD   A,33
 				/*8006*/ 0xC9,     		//	 RET
 
-				// This is here to make sure that SUB1/2 labels are created.
+				// This is here to make sure that SUB001/2 labels are created.
 				//8007 START:
-				/*8007*/ 0xCD, 0x00, 0x80,//	 CALL SUB1
-				/*800A*/ 0xCD, 0x04, 0x80,//	 CALL SUB2
+				/*8007*/ 0xCD, 0x00, 0x80,//	 CALL SUB001
+				/*800A*/ 0xCD, 0x04, 0x80,//	 CALL SUB002
 				/*800D*/ 0xC9,     		//	 RET
 			];
 
@@ -3160,18 +3160,18 @@ suite('Disassembler', () => {
 		// Same as before but changes order o CALLs'
 		test('addFlowThroughReferences changed order 2', () => {
 			const memory = [
-				// This is here to make sure that SUB1/2 labels are created.
+				// This is here to make sure that SUB001/2 labels are created.
 				//7FF9 START:
-				/*7FF9*/ 0xCD, 0x00, 0x80,//	 CALL SUB1
-				/*7FFC*/ 0xCD, 0x04, 0x80,//	 CALL SUB2
+				/*7FF9*/ 0xCD, 0x00, 0x80,//	 CALL SUB001
+				/*7FFC*/ 0xCD, 0x04, 0x80,//	 CALL SUB002
 				/*7FFF*/ 0xC9,     			//	 RET
 
-				//8000 SUB1:
+				//8000 SUB001:
 				/*8000*/ 0x3E, 0x22,	//   LD   A,34
 				/*8002*/ 0x3E, 0x01,	//   LD   A,01
 
 
-				//8004 SUB2: <- This should become referenced by SUB1
+				//8004 SUB002: <- This should become referenced by SUB001
 				/*8004*/ 0x3E, 0x21,	//   LD   A,33
 				/*8006*/ 0xC9,     		//	 RET
 
@@ -3202,19 +3202,19 @@ suite('Disassembler', () => {
 
 		test('turnLBLintoSUB', () => {
 			const memory = [
-				// This is here to make sure that SUB1/2 labels are created.
+				// This is here to make sure that SUB001/2 labels are created.
 				//8000 START:
-				/*8000*/ 0xC2, 0x09, 0x80,	//	 JP NZ,LBL1
-				/*8003*/ 0xCD, 0x0E, 0x80,	//   CALL SUB2
+				/*8000*/ 0xC2, 0x09, 0x80,	//	 JP NZ,LBL001
+				/*8003*/ 0xCD, 0x0E, 0x80,	//   CALL SUB002
 				/*8006*/ 0xC3, 0x00, 0x80,	//	 JP START
 
-				//8009 LBL1/SUB1:	This is initially a LBL that is turned into a SUB
+				//8009 LBL001/SUB001:	This is initially a LBL that is turned into a SUB
 				/*8009*/ 0x3E, 0x22,	//   LD   A,34
 				/*800B*/ 0x3E, 0x01,	//   LD   A,01
 				/*800D*/ 0xC9,     		//	 RET
 
-				//800E SUB2:
-				/*800E*/ 0xC2, 0x09, 0x80,	// JP NZ,LBL1
+				//800E SUB002:
+				/*800E*/ 0xC2, 0x09, 0x80,	// JP NZ,LBL001
 				/*800F*/ 0xC9,     		//	 RET
 
 			];
@@ -3236,16 +3236,16 @@ suite('Disassembler', () => {
 
 		test('findLocalLabelsInSubroutines', () => {
 			const memory = [
-				//8000 SUB1:
+				//8000 SUB001:
 				/*8000*/ 0x3E, 0x22,		//   LD   A,34
-				/*8002*/ 0xC2, 0x06, 0x80,	//   JP NZ,LBL1
+				/*8002*/ 0xC2, 0x06, 0x80,	//   JP NZ,LBL001
 				/*8005*/ 0xC9,     			//	 RET
-				//8006 LBL1:	<- should be turned in a local label
+				//8006 LBL001:	<- should be turned in a local label
 				/*8000*/ 0x3E, 0x23,		//   LD   A,35
-				//8008 LBL2:		<- should be turned in a local loop label
+				//8008 LBL002:		<- should be turned in a local loop label
 				/*8008*/ 0x3E, 0x24,		//   LD   A,36
 				/*800A*/ 0x3E, 0x24,		//   LD   A,36
-				/*800C*/ 0xC2, 0x08, 0x80,	//   JP NZ,LBL2
+				/*800C*/ 0xC2, 0x08, 0x80,	//   JP NZ,LBL002
 				/*800F*/ 0xC9,     			//	 RET
 			];
 
@@ -3267,12 +3267,12 @@ suite('Disassembler', () => {
 
 		test('addParentReferences', () => {
 			const memory = [
-				//8000 SUB1:
+				//8000 SUB001:
 				/*8000*/ 0x3E, 0x22,		//   LD   A,34
-				/*8002*/ 0xCD, 0x09, 0x80,	//   CALL SUB2
-				/*8005*/ 0xCD, 0x09, 0x80,	//   CALL SUB2
+				/*8002*/ 0xCD, 0x09, 0x80,	//   CALL SUB002
+				/*8005*/ 0xCD, 0x09, 0x80,	//   CALL SUB002
 				/*8008*/ 0xC9,     			//	 RET
-				//8009 SUB2:	<- should be turned in a local label
+				//8009 SUB002:	<- should be turned in a local label
 				/*8009*/ 0x3E, 0x23,		//   LD   A,35
 				/*800B*/ 0xC9,     			//	 RET
 			];
@@ -3303,7 +3303,7 @@ suite('Disassembler', () => {
 			parent = addrParents[addr]
 			assert(parent == labelSUB1);	// and has right parent
 
-			// SUB1 has no ref
+			// SUB001 has no ref
 			const refs1 = [...labelSUB1.references];
 			assert(refs1.length == 0);
 		});
@@ -3311,9 +3311,9 @@ suite('Disassembler', () => {
 
 		test("addParentReferences - remove self references: don't remove call", () => {
 			const memory = [
-				//8000 SUB1:
+				//8000 SUB001:
 				/*8000*/ 0x3E, 0x22,		//   LD   A,34
-				/*8002*/ 0xCD, 0x00, 0x80,	//   CALL SUB1
+				/*8002*/ 0xCD, 0x00, 0x80,	//   CALL SUB001
 				/*8005*/ 0xC9,     			//	 RET
 			];
 
@@ -3331,9 +3331,9 @@ suite('Disassembler', () => {
 
 		test('addParentReferences - remove self references: remove jump', () => {
 			const memory = [
-				//8000 SUB1:
+				//8000 SUB001:
 				/*8000*/ 0x3E, 0x22,		//   LD   A,34
-				/*8002*/ 0x10, 256-4,		//   DJNZ SUB1
+				/*8002*/ 0x10, 256-4,		//   DJNZ SUB001
 				/*8005*/ 0xC9,     			//	 RET
 			];
 
