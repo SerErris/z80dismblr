@@ -11,6 +11,7 @@ import {SubroutineStatistics} from './statistics';
 import {EventEmitter} from 'events';
 import {Format} from './format';
 import {readFileSync} from 'fs';
+import {classifyAsmFile, AsmEvent} from './asmClassifier';
 import {CPC_RST, analyzeCpcRst, formatCpcRst} from './cpcRst';
 import {DiscoveredEntry} from './argsWriter';
 import {StructuredFields, Z80Register} from './registerAnalysis';
@@ -60,6 +61,16 @@ export class Disassembler extends EventEmitter {
 	/// summary:/action:/entry:/exit-success:/exit-failure:/corrupted:/
 	/// preserved: markers in the --comments file.
 	protected addressStructured = new Map<number, StructuredFields>();
+
+	/// Addresses seen as label events by applyAsmEventStream (A8).
+	/// Used to detect annotations that no longer have a corresponding
+	/// address in the current binary (orphans).
+	protected importedAddresses = new Set<number>();
+
+	/// User-supplied inline comments parsed from ';;' markers on instruction
+	/// lines (A9).  suppressAuto = true means the user omitted the leading '; '
+	/// auto-comment, so the emitter must not regenerate it.
+	protected addressInlineComments = new Map<number, { text: string; suppressAuto: boolean }>();
 
 	/// Map for statistics (size of subroutines, cyclomatic complexity)
 	protected subroutineStatistics = new Map<DisLabel, SubroutineStatistics>();
@@ -315,6 +326,11 @@ export class Disassembler extends EventEmitter {
 		// Add the real disassembly
 		this.disassembledLines.push(...disLines);
 
+		// Prepend orphan block for any imported addresses now outside the binary.
+		const orphanBlock = this.buildOrphanBlock();
+		if (orphanBlock.length > 0)
+			this.disassembledLines.unshift(...orphanBlock);
+
 		// Remove any preceeding empty lines
 		while (this.disassembledLines.length) {
 			if (this.disassembledLines[0].length > 0)
@@ -396,6 +412,8 @@ export class Disassembler extends EventEmitter {
 		this.offsetLabels = new Map<number, number>();
 		this.addressParents = new Array<DisLabel>();
 		this.addressComments = new Map<number, Comment>();
+		this.importedAddresses = new Set<number>();
+		this.addressInlineComments = new Map();
 	}
 
 
@@ -499,29 +517,27 @@ export class Disassembler extends EventEmitter {
 	 * --commentsout file has one entry per disassembly output line so the two
 	 * can be synced address-by-address.
 	 */
-	public getFullCommentsData(): import('./argsWriter').CommentEntry[] {
-		const addrs = new Set<number>([...this.labels.keys(), ...this.addressComments.keys()]);
-
-		// Add every address the disassembler visited: instruction starts and data bytes.
-		for (let addr = 0; addr < MAX_MEM_SIZE; addr++) {
-			const attr = this.memory.getAttributeAt(addr);
-			if (attr & (MemAttribute.CODE_FIRST | MemAttribute.DATA))
-				addrs.add(addr);
-		}
-
-		return Array.from(addrs)
-			.sort((a, b) => a - b)
-			.map(addr => {
-				const label = this.labels.get(addr);
-				const comment = this.addressComments.get(addr);
-				return {
-					addr,
-					name: label?.name,
-					linesBefore: comment?.linesBefore,
-					inlineComment: comment?.inlineComment,
-					linesAfter: comment?.linesAfter,
-				};
-			});
+	/**
+	 * Returns all named labels for --symbolsout.
+	 * Only entries with a label name are included; nameless addresses,
+	 * auto-generated comments, and prose are all excluded.
+	 */
+	public getSymbolsData(): import('./argsWriter').SymbolEntry[] {
+		return Array.from(this.labels.entries())
+			.filter(([, label]) =>
+				label.name !== undefined &&
+				(label.type === NumberType.CODE_SUB ||
+				 label.type === NumberType.CODE_RST ||
+				 label.type === NumberType.CODE_LBL ||
+				 label.type === NumberType.DATA_LBL) &&
+				!label.isEqu)
+			.sort(([a], [b]) => a - b)
+			.map(([addr, label]) => ({
+				addr,
+				name: label.name,
+				isSub: label.type === NumberType.CODE_SUB ||
+				       label.type === NumberType.CODE_RST,
+			}));
 	}
 
 
@@ -688,7 +704,7 @@ export class Disassembler extends EventEmitter {
 			//console.log('address=0x' + address.toString(16));
 			// disassemble until stop-code
 			//console.log('===');
-			do {
+			while (true) {
 				//console.log('addr=' + address.toString(16));
 				// Check if memory has already been disassembled
 				let attr = this.memory.getAttributeAt(address);
@@ -797,9 +813,7 @@ export class Disassembler extends EventEmitter {
 
 				// Next address
 				address += opcode.length;
-
-				// Check for end of disassembly (JP, RET)
-			} while (!(opcode.flags & OpcodeFlag.STOP));
+			}
 
 			if (this.DBG_COLLECT_LABELS)
 				console.log('\n');
@@ -1844,11 +1858,12 @@ export class Disassembler extends EventEmitter {
 			}
 		}
 
-		// Calculate digit counts
-		const labelSubCountDigits = labelSubCount.toString().length;
-		const labelLblCountDigits = labelLblCount.toString().length;
-		const labelDataLblCountDigits = labelDataLblCount.toString().length;
-		const labelSelfModifyingCountDigits = labelSelfModifyingCount.toString().length;
+		// Calculate digit counts — minimum 3 so labels always sort lexicographically.
+		const minDigits = 3;
+		const labelSubCountDigits = Math.max(minDigits, labelSubCount.toString().length);
+		const labelLblCountDigits = Math.max(minDigits, labelLblCount.toString().length);
+		const labelDataLblCountDigits = Math.max(minDigits, labelDataLblCount.toString().length);
+		const labelSelfModifyingCountDigits = Math.max(minDigits, labelSelfModifyingCount.toString().length);
 
 
 		// Assign names. First the main labels.
@@ -2266,6 +2281,333 @@ export class Disassembler extends EventEmitter {
 
 
 	/**
+	// ── Round-trip .asm import (Stream A, §3.7.1) ──────────────────────────
+
+	/**
+	 * Banner field names that carry user data and survive the round-trip.
+	 * Fields absent from this map (Corrupted, Preserved, Address, Type,
+	 * Called by, Calls) are always regenerated and are silently ignored.
+	 */
+	private static readonly ASM_FIELD_TO_MARKER = new Map<string, string>([
+		['Summary',        'summary'],
+		['Action',         'action'],
+		['Entry',          'entry'],
+		['Exit (success)', 'exit-success'],
+		['Exit (failure)', 'exit-failure'],
+	]);
+
+	/** Em-dash sentinel — indicates "not yet documented". */
+	private static readonly EM_DASH = '\u2014';
+
+	/**
+	 * Reads a .asm file (the --out round-trip file) and imports all
+	 * user-authored structured fields into addressStructured.
+	 * Called automatically when the --out file already exists on disk,
+	 * unless --fresh is set.
+	 */
+	public setAddressCommentsFromAsm(path: string): void {
+		this.applyAsmEventStream(classifyAsmFile(path));
+	}
+
+	/**
+	 * Processes a pre-classified event stream from a .asm file and
+	 * populates addressStructured with the user-authored structured fields
+	 * extracted from subroutine banners.
+	 *
+	 * Exposed as protected (not private) so tests can drive it directly
+	 * without writing a temp file.
+	 */
+	protected applyAsmEventStream(events: AsmEvent[]): void {
+		type State = 'normal' | 'in-banner' | 'after-banner' | 'in-orphan';
+		let state: State = 'normal';
+
+		// Structured fields accumulated for the current banner.
+		let pending: StructuredFields = {};
+		// Marker name of the field currently in multi-line continuation mode.
+		let currentMarker: string | undefined;
+		// Free-comment lines buffered between code lines (A6).
+		let pendingComments: string[] = [];
+		// Address and label name being re-imported from an orphan block (A8).
+		let orphanAddress = 0;
+		let orphanLabelName: string | undefined;
+
+		const flushPendingComments = (address: number) => {
+			if (pendingComments.length === 0) return;
+			let comment = this.addressComments.get(address);
+			if (!comment) {
+				comment = new Comment();
+				this.addressComments.set(address, comment);
+			}
+			for (const text of pendingComments)
+				comment.addBefore(text);
+			pendingComments = [];
+		};
+
+		for (const ev of events) {
+			switch (state) {
+				case 'normal':
+					if (ev.kind === 'banner-open') {
+						pendingComments = [];
+						pending = {};
+						currentMarker = undefined;
+						state = 'in-banner';
+					} else if (ev.kind === 'label') {
+						this.importedAddresses.add(ev.address);
+						flushPendingComments(ev.address);
+						this.applyFixedLabelIfRenamed(ev.address, ev.name);
+					} else if (ev.kind === 'instruction' || ev.kind === 'data-directive') {
+						flushPendingComments(ev.address);
+						if (ev.kind === 'instruction' && ev.inlineComment)
+							this.addressInlineComments.set(ev.address, ev.inlineComment);
+					} else if (ev.kind === 'free-comment') {
+						pendingComments.push(ev.text);
+					} else if (ev.kind === 'blank') {
+						pendingComments = [];
+					} else if (ev.kind === 'orphan-header') {
+						// Begin re-importing a previously orphaned annotation.
+						pendingComments = [];
+						pending = {};
+						currentMarker = undefined;
+						orphanAddress = ev.address;
+						orphanLabelName = undefined;
+						state = 'in-orphan';
+					}
+					break;
+
+				case 'in-orphan': {
+					if (ev.kind === 'orphan-close') {
+						// Commit everything collected for this orphan.
+						this.importedAddresses.add(orphanAddress);
+						if (orphanLabelName)
+							this.applyFixedLabelIfRenamed(orphanAddress, orphanLabelName);
+						if (Object.keys(pending).length > 0)
+							this.addressStructured.set(orphanAddress, pending);
+						if (pendingComments.length > 0) {
+							let c = this.addressComments.get(orphanAddress);
+							if (!c) { c = new Comment(); this.addressComments.set(orphanAddress, c); }
+							for (const t of pendingComments) c.addBefore(t);
+						}
+						pending = {};
+						pendingComments = [];
+						currentMarker = undefined;
+						orphanAddress = 0;
+						orphanLabelName = undefined;
+						state = 'normal';
+						break;
+					}
+					if (ev.kind === 'orphan-header') {
+						// Malformed: new header before close — treat as new orphan.
+						pending = {};
+						pendingComments = [];
+						currentMarker = undefined;
+						orphanAddress = ev.address;
+						orphanLabelName = undefined;
+						break;
+					}
+					if (ev.kind === 'orphan-label') {
+						orphanLabelName = ev.name;
+						break;
+					}
+					if (ev.kind === 'banner-field') {
+						const marker = Disassembler.ASM_FIELD_TO_MARKER.get(ev.field);
+						if (marker) {
+							if (ev.value === Disassembler.EM_DASH) {
+								currentMarker = undefined;
+							} else if (ev.value === '') {
+								currentMarker = marker;
+							} else {
+								this.applyStructuredMarker(pending, marker, ev.value);
+								currentMarker = undefined;
+							}
+						} else {
+							currentMarker = undefined;
+						}
+						break;
+					}
+					if (ev.kind === 'free-comment') {
+						if (currentMarker && ev.text.startsWith(';   ')) {
+							this.applyStructuredMarker(pending, currentMarker, ev.text.slice(4));
+						} else {
+							currentMarker = undefined;
+							pendingComments.push(ev.text);
+						}
+						break;
+					}
+					// blank: stay in orphan, accumulate nothing
+					break;
+				}
+
+				case 'in-banner':
+					if (ev.kind === 'banner-close') {
+						state = 'after-banner';
+						currentMarker = undefined;
+						break;
+					}
+					if (ev.kind === 'banner-field') {
+						const marker = Disassembler.ASM_FIELD_TO_MARKER.get(ev.field);
+						if (marker) {
+							if (ev.value === Disassembler.EM_DASH) {
+								// Sentinel — no user data, leave this field unset.
+								currentMarker = undefined;
+							} else if (ev.value === '') {
+								// Empty value signals multi-line: await continuation lines.
+								currentMarker = marker;
+							} else {
+								// Single-line user value — apply directly.
+								this.applyStructuredMarker(pending, marker, ev.value);
+								currentMarker = undefined;
+							}
+						} else {
+							// Ignored field (Corrupted, Preserved, etc.) — also
+							// terminates any active multi-line continuation.
+							currentMarker = undefined;
+						}
+						break;
+					}
+					if (ev.kind === 'free-comment') {
+						// Continuation lines are indented with two extra spaces by the
+						// emitter: '; ' prefix + '  ' indent = ';   ' (4 chars total).
+						if (currentMarker && ev.text.startsWith(';   ')) {
+							this.applyStructuredMarker(pending, currentMarker, ev.text.slice(4));
+						} else {
+							// Non-continuation line inside banner (e.g. auto-generated
+							// "(analysis unavailable:…)" note) — end any multi-line.
+							currentMarker = undefined;
+						}
+						break;
+					}
+					break;
+
+				case 'after-banner':
+					if (ev.kind === 'label') {
+						// Associate the collected fields with this label's address.
+						if (Object.keys(pending).length > 0)
+							this.addressStructured.set(ev.address, pending);
+						this.importedAddresses.add(ev.address);
+						flushPendingComments(ev.address);
+						this.applyFixedLabelIfRenamed(ev.address, ev.name);
+						pending = {};
+						state = 'normal';
+						break;
+					}
+					if (ev.kind === 'free-comment') {
+						// Capture user prose between banner-close and the label (A6).
+						pendingComments.push(ev.text);
+						break;
+					}
+					if (ev.kind === 'banner-open') {
+						// A new banner started before we found a label — discard
+						// the previous pending fields and begin fresh.
+						pendingComments = [];
+						pending = {};
+						currentMarker = undefined;
+						state = 'in-banner';
+						break;
+					}
+					// blank / instruction: keep waiting for the label.
+					break;
+			}
+		}
+	}
+
+
+	/**
+	 * Stores the label name from a round-trip .asm file if the user renamed it.
+	 * A name that matches any auto-generated pattern is left alone so the next
+	 * run can re-number freely; any other name is locked in with isFixed = true.
+	 */
+	private applyFixedLabelIfRenamed(address: number, name: string): void {
+		if (this.isAutoGeneratedName(name))
+			return;
+		this.setLabel(address, name, NumberType.DATA_LBL);
+		const lbl = this.labels.get(address);
+		if (lbl) lbl.isFixed = true;
+	}
+
+	/**
+	 * Returns true when name was produced by assignLabelNames() and therefore
+	 * carries no user intent.  Any other name is considered user-authored.
+	 */
+	private isAutoGeneratedName(name: string): boolean {
+		// Local labels (.sub001_l5 etc.) are always auto-generated.
+		if (name.startsWith('.'))
+			return true;
+		const hasDigitSuffix = (prefix: string) =>
+			name.startsWith(prefix) && /^\d+$/.test(name.slice(prefix.length));
+		// RST labels have a 2-digit hex suffix (e.g. RST08).
+		const isRst = name.startsWith(this.labelRstPrefix)
+			&& /^[0-9A-Fa-f]{2}$/.test(name.slice(this.labelRstPrefix.length));
+		return hasDigitSuffix(this.labelSubPrefix)
+			|| hasDigitSuffix(this.labelLblPrefix)
+			|| hasDigitSuffix(this.labelDataLblPrefix)
+			|| hasDigitSuffix(this.labelSelfModifyingPrefix)
+			|| name === this.labelIntrptPrefix
+			|| isRst;
+	}
+
+
+	// ── Orphan handling (A8) ─────────────────────────────────────────────────
+
+	/**
+	 * Builds a comment block for any imported address that no longer falls
+	 * within the loaded memory ranges.  The block is prepended to the
+	 * disassembly so the user can see and manually re-attach the lost data.
+	 *
+	 * Format (chosen so lines re-parse as harmless 'other' or 'free-comment'
+	 * events and never re-attach to labels/instructions on the next round):
+	 *
+	 *   ;; ORPHANED: $BB15 — address not in loaded memory
+	 *   ; KM_EXP_BUFFER:
+	 *   ; Summary: Allocate a buffer for expansion strings.
+	 *   ; Entry: HL = pointer to buffer
+	 *   ; Never touches the paging hardware.
+	 */
+	protected buildOrphanBlock(): string[] {
+		const lines: string[] = [];
+
+		const orphans = [...this.importedAddresses]
+			.filter(addr => !(this.memory.getAttributeAt(addr) & MemAttribute.ASSIGNED))
+			.sort((a, b) => a - b);
+
+		for (const addr of orphans) {
+			const lbl   = this.labels.get(addr);
+			const s     = this.addressStructured.get(addr);
+			const c     = this.addressComments.get(addr);
+			const hasLabel     = lbl?.isFixed && lbl.name;
+			const hasStructured = s && Object.keys(s).length > 0;
+			const hasBefore    = c?.linesBefore && c.linesBefore.length > 0;
+
+			if (!hasLabel && !hasStructured && !hasBefore)
+				continue;
+
+			lines.push(`;; ORPHANED: $${Format.getHexString(addr, 4)} — address not in loaded memory`);
+
+			if (hasLabel)
+				lines.push(`;; LABEL: ${lbl!.name}`);
+
+			if (s) {
+				if (s.summary)
+					lines.push(`; Summary: ${s.summary}`);
+				for (const v of s.action      ?? []) lines.push(`; Action: ${v}`);
+				for (const v of s.entry       ?? []) lines.push(`; Entry: ${v}`);
+				for (const v of s.exitSuccess ?? []) lines.push(`; Exit (success): ${v}`);
+				for (const v of s.exitFailure ?? []) lines.push(`; Exit (failure): ${v}`);
+			}
+
+			if (c?.linesBefore)
+				lines.push(...c.linesBefore);
+
+			lines.push(';;');
+			lines.push('');
+		}
+
+		return lines;
+	}
+
+
+	// ── --symbols sidecar import ─────────────────────────────────────────────
+
+	/**
 	 * Reads in a file from the user that sets address labels and the comments to show in the disassembly.
 	 * @param commentsFile The file to read. Format:
 	 * ; comment1
@@ -2311,9 +2653,12 @@ export class Disassembler extends EventEmitter {
 					// Store structured fields when any were found (§8.9).
 					if (Object.keys(structured).length > 0)
 						this.addressStructured.set(commentAddr, structured);
-					// Set label
+					// Set label — mark as fixed so auto-generated names (e.g. FAR_XXXX
+					// from CPC RST handler) cannot overwrite a user-supplied name.
 					if (commentLabelName) {
 						this.setLabel(commentAddr, commentLabelName, NumberType.DATA_LBL);	// Data label might be changed to something else.
+						const lbl = this.labels.get(commentAddr);
+						if (lbl) lbl.isFixed = true;
 					}
 				}
 				// Next state
@@ -2680,15 +3025,32 @@ export class Disassembler extends EventEmitter {
 				}
 
 				// If not done before, add comments
+				const userInline = this.addressInlineComments.get(address);
 				if (!comment || addrLabel) {
 					// main comment already added or no comment present
-					if (!this.disableCommentsInDisassembly && commentText && commentText.length > 0)
-						line += '\t; ' + commentText;
+					if (!this.disableCommentsInDisassembly) {
+						if (userInline) {
+							if (!userInline.suppressAuto && commentText && commentText.length > 0)
+								line += '\t; ' + commentText + ' ;; ' + userInline.text;
+							else
+								line += '\t;; ' + userInline.text;
+						} else if (commentText && commentText.length > 0) {
+							line += '\t; ' + commentText;
+						}
+					}
 					lines.push(line);
 				}
 				else {
-					// Add comments
+					// Add comments (linesBefore + instruction + optional linesAfter)
 					const commentLines = Comment.getLines(comment, line, this.disableCommentsInDisassembly);
+					if (userInline && !this.disableCommentsInDisassembly) {
+						// Instruction line is after linesBefore entries
+						const instrIdx = comment.linesBefore ? comment.linesBefore.length : 0;
+						if (!userInline.suppressAuto && commentText && commentText.length > 0)
+							commentLines[instrIdx] += '\t; ' + commentText + ' ;; ' + userInline.text;
+						else
+							commentLines[instrIdx] += '\t;; ' + userInline.text;
+					}
 					lines.push(...commentLines);
 				}
 

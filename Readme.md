@@ -607,3 +607,61 @@ LD HL,1234h
 ~~~
 
 Please note that without the extended opcode z80dismblr would have interpreted the 3Eh as an opcode. Now it ignores it and the disassembly continues at "LD HL,1234h".
+
+
+---
+
+## Release Notes
+
+### v2.0.0 — Firmware-style headers, register analysis, symbol files
+
+This is the first release of the fork. It diverges significantly from
+the original v1.6.2 upstream.
+
+**Breaking changes**
+
+- `--comments` renamed to `--symbols`. Update any scripts or `.args`
+  files that use the old name.
+- `--commentsout` renamed to `--symbolsout`. Same.
+- The `--symbols` / `--symbolsout` file format no longer carries plain
+  prose comments — it is now a structured symbol definition file only.
+  Any plain comments previously in `--comments` files should be moved
+  into the `--out` disassembly output instead.
+
+**New features**
+
+- **Firmware-style subroutine headers** — every `CODE_SUB` / `CODE_RST`
+  label is preceded by a compact 15-19 line banner modelled on the
+  Amstrad CPC firmware manual, including address, size, cyclomatic
+  complexity, type, summary, action, entry/exit conditions, and caller/
+  callee cross-references.
+- **Auto-detected register usage** — static analysis determines which
+  registers a subroutine corrupts and which it preserves. PUSH/POP
+  symmetry is detected; callee effects propagate bottom-up. When static
+  analysis cannot classify (indirect jumps, self-modifying code) both
+  lists show `—` and an explanatory note is added.
+- **Structured symbol files (`--symbols`)** — the sidecar file now
+  carries machine-readable structured fields (`summary:`, `action:`,
+  `entry:`, `exit-success:`, `exit-failure:`, `corrupted:`,
+  `preserved:`) that map directly into the subroutine header. Plain
+  prose belongs in the `--out` round-trip file instead.
+- **Amstrad CPC RST handling** — `--cpc` activates firmware far-call
+  RST decoding. See the *Machine-specific RST Handling* section.
+
+**Design documents**
+
+Detailed design documents covering all new features are in the
+[design/](design/) directory:
+
+- [`sub_header.md`](design/sub_header.md) — firmware-style header spec
+- [`iterative_workflow.md`](design/iterative_workflow.md) — round-trip
+  `.asm` workflow and clean assembler output (Stream A / B, in progress)
+- [`amstrad_cpc_rst_handling.md`](design/amstrad_cpc_rst_handling.md) — CPC RST design
+
+---
+
+### v1.6.2 and earlier
+
+See the original project at
+[github.com/maziac/z80dismblr](https://github.com/maziac/z80dismblr)
+and its [CHANGELOG.md](CHANGELOG.md).

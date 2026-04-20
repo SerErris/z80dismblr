@@ -8,3 +8,9 @@ npm-debug.log
 coverage/
 *~
 todo.md
+
+# Generated smoke-test output (produced by smoke_pipeline.sh)
+src/tests/data/smoke_test_out.s
+src/tests/data/smoke_test_out_raw.bin
+src/tests/data/smoke_test_out_block1.bin
+src/tests/data/smoke_test_out_block2.bin

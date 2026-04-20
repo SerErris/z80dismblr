@@ -9,6 +9,7 @@ export const enum HexFormat {
 	CPC,     // #nnnn   — e.g. #1234  (Amstrad CPC / sjasmplus native)
 	Z80,     // $nnnn   — e.g. $1234  (Zilog / sjasmplus dollar prefix)
 	C,       // 0xnnnn  — e.g. 0x1234 (C style, readable but not always reassemblable)
+	AMP,     // &nnnn   — e.g. &1234  (WinApe / Maxam / BBC BASIC style)
 }
 
 
@@ -37,6 +38,7 @@ export class Format {
 			case HexFormat.Z80:    return '$' + s;
 			case HexFormat.C:      return '0x' + s;
 			case HexFormat.INTEL0: return '0' + s + 'h';
+			case HexFormat.AMP:    return '&' + s;
 			default:               return s + 'h';   // INTEL
 		}
 	}

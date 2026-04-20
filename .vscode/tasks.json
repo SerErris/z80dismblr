@@ -1,6 +1,4 @@
 {
-    // See https://go.microsoft.com/fwlink/?LinkId=733558
-    // for the documentation about the tasks.json format
     "version": "2.0.0",
     "tasks": [
         {
@@ -22,7 +20,6 @@
                 "$gcc"
             ]
         },
-
         {
             "label": "Build Executables",
             "type": "shell",
@@ -31,8 +28,30 @@
                 "-c",
                 "rm *.zip; pkg -t node13-macos,node13-linux,node13-win out/z80dismblr.js && zip z80dismblr-linux.zip z80dismblr-linux && zip z80dismblr-macos.zip z80dismblr-macos && zip z80dismblr-win.zip z80dismblr-win.exe"
             ],
-            "problemMatcher": [
-            ]
+            "problemMatcher": []
+        },
+        {
+            "label": "z80check",
+            "type": "shell",
+            "command": "sjasmplus",
+            "args": [
+                "--nologo",
+                "--msg=all",
+                "--fullpath",
+                "--raw=/dev/null",
+                "${file}"
+            ],
+            "problemMatcher": "$errmatcher-sjasmplus",
+            "presentation": {
+                "reveal": "silent", // Verhindert das Aufpoppen des Terminals
+                "panel": "shared",
+                "clear": true,
+                "focus": false
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
         }
     ]
 }
