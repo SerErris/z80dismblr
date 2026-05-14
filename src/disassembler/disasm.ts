@@ -2737,6 +2737,14 @@ export class Disassembler extends EventEmitter {
 						this.importedAddresses.add(ev.address);
 						flushPendingComments(ev.address);
 						this.applyFixedLabelIfRenamed(ev.address, ev.name);
+						// A banner is an explicit declaration that this is a subroutine.
+						// Promote to CODE_SUB so the banner is regenerated on the next
+						// run even if the address was only reached by a jump, not a CALL.
+						{
+							const lbl = this.labels.get(ev.address);
+							if (lbl && lbl.type < NumberType.CODE_SUB)
+								lbl.type = NumberType.CODE_SUB;
+						}
 						pending = {};
 						state = 'normal';
 						break;

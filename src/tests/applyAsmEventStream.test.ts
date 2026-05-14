@@ -537,6 +537,30 @@ suite('A4 — applyAsmEventStream', () => {
         assert(c && c.linesBefore && c.linesBefore.includes('; local variable block'));
     });
 
+    test('banner promotes label to CODE_SUB', function () {
+        if (typeof dasm.applyAsmEventStream !== 'function') return this.skip();
+        // A jp-only target starts life as CODE_LBL. Writing a banner in the
+        // .asm file is an explicit declaration that it is a subroutine — the
+        // round-trip importer must promote it to CODE_SUB so the banner is
+        // regenerated on the next run.
+        const { NumberType } = require('../disassembler/numbertype');
+        dasm.labels.set(0xC344, { type: NumberType.CODE_LBL, name: 'cpm_cold_boot', isFixed: false, isEqu: false, references: new Set() });
+
+        const events: AsmEvent[] = [
+            { kind: 'banner-open' },
+            { kind: 'banner-mid', name: 'cpm_cold_boot' },
+            { kind: 'banner-field', field: 'Summary', value: 'Start CP/M cold boot' },
+            { kind: 'banner-close' },
+            { kind: 'label', address: 0xC344, name: 'cpm_cold_boot' },
+        ];
+
+        dasm.applyAsmEventStream(events);
+
+        const lbl = dasm.labels.get(0xC344);
+        assert.strictEqual(lbl.type, NumberType.CODE_SUB,
+            'banner import must promote CODE_LBL to CODE_SUB');
+    });
+
     test('pre-label comment and structured fields both captured', function () {
         if (typeof dasm.applyAsmEventStream !== 'function') return this.skip();
         const events: AsmEvent[] = [
