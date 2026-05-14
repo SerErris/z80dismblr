@@ -53,6 +53,7 @@ Key capabilities:
 16. [Custom Opcode Extensions (`--opcode`)](#16-custom-opcode-extensions---opcode)
 17. [All Command-line Options](#17-all-command-line-options)
 18. [Typical Workflows by Use Case](#18-typical-workflows-by-use-case)
+19. [AI-Assisted Reverse Engineering](#19-ai-assisted-reverse-engineering)
 
 ---
 
@@ -112,6 +113,47 @@ node out/z80dismblr.js --bin 0x0000 rom.bin --out rom.asm --cleanout rom.s
 ## 4. The Iterative Workflow
 
 The core idea is that `--out rom.asm` serves two purposes simultaneously: it is the disassembly listing you read, and it is the annotation file you edit. You never need a separate side-file for notes — everything lives in one place.
+
+### 4.0 Required and Recommended Parameters
+
+**Mandatory minimum:**
+
+| Parameter | Why required |
+|-----------|-------------|
+| `--bin <addr> <file>` | Load the binary to disassemble |
+| `--out <file>` | Both the output target and the auto-import source on re-runs |
+| `--codelabel <addr>` OR `--sna` | Seed at least one code entry point; without it the disassembler has nowhere to start and produces no output |
+| `--noautomaticaddr` | Required when the ROM does NOT start at `0x0000`; suppresses the automatic `0x0000` entry point that would cause spurious code discovery |
+
+**Strongly recommended for the iterative workflow:**
+
+| Parameter | Why recommended |
+|-----------|----------------|
+| `--args <file>` | Keeps the command identical across every run; prevents parameter drift (see §4.8) |
+| `--addbytes` | Shows hex bytes next to each instruction; not required for round-trip but essential for cross-referencing raw bytes against the listing |
+| `--symbols <file>` | Pre-loads known label names and documentation fields; much better starting point than all-auto-generated names |
+| `--symbolsout <file>` | Exports discovered labels on each run as a primer; review and fold into `--symbols` |
+| `--argsout <file>` | Exports discovered data ranges on each run; review and fold into `--args` |
+
+**Machine-specific flags:**
+
+| Parameter | When to use |
+|-----------|------------|
+| `--machine cpc` | Any Amstrad CPC firmware ROM — enables RST dispatch decoding |
+| `--decoder vortex` | Vortex encrypted disk-controller ROMs — decodes XOR-encrypted operand bytes |
+
+**Round-trip compatibility of display options:**
+
+The round-trip parser ignores formatting; you can freely change any display option between runs without losing your annotations:
+
+| Option | Default | Round-trip safe? |
+|--------|---------|-----------------|
+| `--addbytes` | off | ✅ byte columns are skipped on re-read |
+| `--clmnsAddress` | on (13) | ✅ address column is skipped on re-read |
+| `--uppercase` | off | ✅ case is ignored on re-read |
+| `--hexformat` | intel | ✅ any hex style is accepted on re-read |
+
+The address column — `--clmnsAddress` — is **on by default** and should stay on. It is not required for the round-trip mechanism itself, but it is essential for human navigation: every line shows the hex address at the left margin, letting you jump directly to any address in your editor or find a line when reading a hardware register dump or trace.
 
 ### 4.1 First Run
 
@@ -197,6 +239,76 @@ To start completely fresh (ignoring all previous edits), simply delete or rename
 | Instruction mnemonics and operands | ❌ Always regenerated |
 
 The `—` character (em-dash, U+2014) is the sentinel value meaning "not yet documented". Any field containing only `—` is treated as empty and will not be preserved. Replace it with your own text to make the field sticky.
+
+### 4.5 Opcode Byte Display (`--addbytes`)
+
+```
+--addbytes
+```
+
+Adds a column of hex bytes between the address and the mnemonic:
+
+```
+0000 CD 10 00     CALL SUB001      ; 0010h
+```
+
+**Not required for round-trip** — the byte column is skipped transparently on re-read. However, enabling it is strongly recommended for ROM analysis because:
+- You can cross-reference raw bytes against hardware documentation or traces
+- You can spot multi-byte NOPs, padding, or suspicious bytes
+- AI tools (like Claude Code) can use the byte column to verify their own instruction decoding
+
+The column width is controlled by `--clmnsbytes`. Default is wide enough for up to four bytes. For ROMs with the odd very long instruction (IX/IY prefixed), increase if needed.
+
+### 4.6 Using an Args File for Reproducibility
+
+**The most important single practice for the iterative workflow** is to keep all options in a single `--args` file. This guarantees that every run — whether you are at the keyboard or a script/AI is running it — uses exactly the same parameters.
+
+```
+# project.args
+--bin 0xC000 rom/firmware.bin
+--machine cpc
+--decoder vortex
+--noautomaticaddr
+--codelabel 0xC000
+--symbols firmware.sym
+--out output/firmware.asm
+--addbytes
+--hexformat cpc
+--argsout firmware_discovered.args
+--symbolsout firmware_discovered.sym
+```
+
+```bash
+node /path/to/z80dismblr/out/z80dismblr.js --args project.args
+```
+
+The `--args` file can reference other `--args` files (nesting is allowed), so you can split stable configuration from run-specific overrides.
+
+### 4.7 Starting Fresh
+
+To discard all your previous annotations and start from scratch:
+
+```bash
+# Option 1: delete the output file
+rm output/firmware.asm
+
+# Option 2: use --fresh to suppress auto-import on this run only
+node /path/to/z80dismblr/out/z80dismblr.js --args project.args --fresh
+```
+
+`--fresh` suppresses the auto-import of the `--out` file for this run only. Your symbols file (`--symbols`) is always loaded regardless.
+
+### 4.8 Multi-pass Iterative Strategy
+
+A practical rhythm for deep ROM analysis:
+
+**Pass 1 — Discovery.**  Run with `--symbolsout` and `--argsout`. Review the generated symbol skeleton and args file. Identify obvious subroutines, add names, mark any additional data ranges.
+
+**Pass 2 — Seed known labels.**  Build a `--symbols` file from what you found. Add well-known firmware entry points (e.g. CPC BIOS jumpblock addresses). Re-run.
+
+**Pass 3–N — Annotation.**  Open the `.asm` file in your editor. Use `;;` inline comments to note intent as you understand it. Rename labels in-place. Fill in structured fields in the subroutine banners. Re-run after each session to regenerate the freshly-analysed parts.
+
+At any time you can also run with `--cleanout` to produce a re-assembleable `.s` file, verify it assembles byte-for-byte, and use that to test your understanding of the ROM structure.
 
 ---
 
@@ -1065,6 +1177,47 @@ EOF
 node out/z80dismblr.js --args cpc.args
 ```
 
+### Encrypted Vortex Disk-Controller ROM (CPC)
+
+Typical layout:
+```
+project/
+├── project.args            # all CLI options live here
+├── firmware.sym            # curated labels and documentation
+├── rom/
+│   └── vortex_os.rom       # original encrypted ROM
+└── output/
+    ├── vortex_os.asm       # iterative annotation workspace
+    └── vortex_os.s         # clean re-assembleable output
+```
+
+**`project.args`:**
+```
+# Vortex disk-controller ROM
+--bin 0x0000 rom/vortex_os.rom
+--machine cpc
+--decoder vortex
+--noautomaticaddr
+--codelabel 0x0000
+--symbols firmware.sym
+--out output/vortex_os.asm
+--addbytes
+--hexformat cpc
+--cleanout output/vortex_os.s
+--cleanout-format sjasmplus
+--argsout firmware_discovered.args
+--symbolsout firmware_discovered.sym
+```
+
+**Run command (identical on every pass):**
+```bash
+node /path/to/z80dismblr/out/z80dismblr.js --args project.args
+```
+
+**What `--decoder vortex` does:** operand and data bytes are passed through the Vortex XOR decoder (based on address bits A2/A4); M1 opcode-fetch bytes are read raw. The output `.asm` and `.s` are in cleartext and will NOT reproduce the original encrypted binary byte-for-byte.
+
+**What `--machine cpc` adds:** RST opcodes are decoded as CPC firmware calls (1-byte or 3-byte variants). FAR CALL pointer records are automatically marked as data ranges and added to `--argsout`.
+
 ### Iterative Documentation with symbolsout
 
 ```bash
@@ -1125,3 +1278,40 @@ node out/z80dismblr.js \
 # Render
 dot -Tpng callgraph_GAME_INIT.dot -o callgraph.png
 ```
+
+---
+
+## 19. AI-Assisted Reverse Engineering
+
+When working with an AI assistant (e.g. Claude Code in VS Code), the most
+effective setup is:
+
+1. **All options in `project.args`** — the AI runs the disassembler with a
+   single command and the output is always consistent.
+
+2. **`research/` folder for context** — place hardware specifications, ROM
+   maps, schematic references, and any other documentation the AI needs to
+   understand the target in a `research/` subdirectory of your project.
+
+3. **A session guide** — a document (e.g. `research/ai_guide.md`) that tells
+   the AI exactly where files are, how to run the disassembler, and what
+   conventions to follow for annotations.
+
+A ready-to-use template for this guide is provided at:
+
+```
+documentation/ai_reverse_engineering_guide.md
+```
+
+Copy it to your project's `research/` directory and fill in the placeholders
+(`<ROM_FILE>`, `<BASE_ADDRESS>`, `<ROM_NAME>`, etc.) for your specific ROM.
+The document covers:
+
+- Project directory structure
+- The single command to run the disassembler
+- How to read the `.asm` output (address column, byte column, banners)
+- How to annotate (label rename, `;;` comments, structured fields)
+- How to declare known I/O ports and data ranges
+- A workflow guide for Claude Code sessions
+- Common pitfalls and their fixes
+- A quick-reference annotation cheat sheet
