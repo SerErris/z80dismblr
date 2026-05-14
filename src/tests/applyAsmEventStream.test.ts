@@ -537,6 +537,44 @@ suite('A4 — applyAsmEventStream', () => {
         assert(c && c.linesBefore && c.linesBefore.includes('; local variable block'));
     });
 
+    test('; type: sub comment promotes label to CODE_SUB and is not stored as linesBefore', function () {
+        if (typeof dasm.applyAsmEventStream !== 'function') return this.skip();
+        const { NumberType } = require('../disassembler/numbertype');
+        dasm.labels.set(0xC344, { type: NumberType.CODE_LBL, name: 'cpm_cold_boot', isFixed: false, isEqu: false, references: new Set() });
+
+        const events: AsmEvent[] = [
+            { kind: 'free-comment', text: '; type: sub' },
+            { kind: 'label', address: 0xC344, name: 'cpm_cold_boot' },
+        ];
+
+        dasm.applyAsmEventStream(events);
+
+        const lbl = dasm.labels.get(0xC344);
+        assert.strictEqual(lbl.type, NumberType.CODE_SUB,
+            '; type: sub must promote CODE_LBL to CODE_SUB');
+        const c = dasm.addressComments.get(0xC344);
+        assert.ok(!c || !c.linesBefore || !c.linesBefore.includes('; type: sub'),
+            '; type: sub must not appear in linesBefore');
+    });
+
+    test('; type: sub is cleared by a blank line', function () {
+        if (typeof dasm.applyAsmEventStream !== 'function') return this.skip();
+        const { NumberType } = require('../disassembler/numbertype');
+        dasm.labels.set(0xC344, { type: NumberType.CODE_LBL, name: 'cpm_cold_boot', isFixed: false, isEqu: false, references: new Set() });
+
+        const events: AsmEvent[] = [
+            { kind: 'free-comment', text: '; type: sub' },
+            { kind: 'blank' },
+            { kind: 'label', address: 0xC344, name: 'cpm_cold_boot' },
+        ];
+
+        dasm.applyAsmEventStream(events);
+
+        const lbl = dasm.labels.get(0xC344);
+        assert.notStrictEqual(lbl.type, NumberType.CODE_SUB,
+            'blank line between ; type: sub and label must cancel the promotion');
+    });
+
     test('banner promotes label to CODE_SUB', function () {
         if (typeof dasm.applyAsmEventStream !== 'function') return this.skip();
         // A jp-only target starts life as CODE_LBL. Writing a banner in the

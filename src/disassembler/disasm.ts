@@ -2551,6 +2551,8 @@ export class Disassembler extends EventEmitter {
 		let currentMarker: string | undefined;
 		// Free-comment lines buffered between code lines (A6).
 		let pendingComments: string[] = [];
+		// Set when '; type: sub' is seen — promotes the next label to CODE_SUB.
+		let pendingTypeSub = false;
 		// Address and label name being re-imported from an orphan block (A8).
 		let orphanAddress = 0;
 		let orphanLabelName: string | undefined;
@@ -2583,13 +2585,28 @@ export class Disassembler extends EventEmitter {
 						this.importedAddresses.add(ev.address);
 						flushPendingComments(ev.address);
 						this.applyFixedLabelIfRenamed(ev.address, ev.name);
+						if (pendingTypeSub) {
+							const lbl = this.labels.get(ev.address);
+							if (lbl && lbl.type < NumberType.CODE_SUB)
+								lbl.type = NumberType.CODE_SUB;
+							pendingTypeSub = false;
+						}
 					} else if (ev.kind === 'instruction' || ev.kind === 'data-directive') {
+						pendingTypeSub = false;
 						flushPendingComments(ev.address);
 						if (ev.kind === 'instruction' && ev.inlineComment)
 							this.addressInlineComments.set(ev.address, ev.inlineComment);
 					} else if (ev.kind === 'free-comment') {
-						pendingComments.push(ev.text);
+						if (ev.text === '; type: sub') {
+							// Consumed here — not stored as linesBefore so the next
+							// run replaces it with a generated banner.
+							pendingTypeSub = true;
+							pendingComments = [];
+						} else {
+							pendingComments.push(ev.text);
+						}
 					} else if (ev.kind === 'blank') {
+						pendingTypeSub = false;
 						pendingComments = [];
 					} else if (ev.kind === 'orphan-header') {
 						// Begin re-importing a previously orphaned annotation.
