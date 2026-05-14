@@ -6,7 +6,8 @@
   "scripts": {
     "compile": "tsc -p ./src",
     "watch": "tsc -w -p ./src",
-    "test": "mocha -u tdd 'out/**/*.test{s,}.js'"
+    "test": "mocha -u tdd 'out/**/*.test{s,}.js'",
+    "package": "npm run compile && npx @yao-pkg/pkg out/z80map.js --targets node20-linux-x64,node20-macos-x64,node20-macos-arm64,node20-win-x64 --output z80map"
   },
   "author": "Christoph Linden",
   "contributors": [

@@ -26,7 +26,7 @@
             "command": "zsh",
             "args": [
                 "-c",
-                "rm *.zip; pkg -t node13-macos,node13-linux,node13-win out/z80map.js && zip z80map-linux.zip z80map-linux && zip z80map-macos.zip z80map-macos && zip z80map-win.zip z80map-win.exe"
+                "npm run compile && npx @yao-pkg/pkg out/z80map.js --targets node20-linux-x64,node20-macos-x64,node20-macos-arm64,node20-win-x64 --output z80map && zip z80map-linux-x64.zip z80map-linux && zip z80map-macos-x64.zip z80map-macos && zip z80map-macos-arm64.zip z80map-macos-arm64 && zip z80map-win-x64.zip z80map-win.exe"
             ],
             "problemMatcher": []
         },

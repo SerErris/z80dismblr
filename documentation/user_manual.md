@@ -2,7 +2,7 @@
 
 **z80map** is a disassembler for Z80 binary code. It uses code-flow-graph analysis rather than a simple linear sweep: it follows every reachable branch (CALL, JP, JR, conditional jumps, RST) and marks the rest as data. The result is a structured, annotated listing that cleanly separates code from data.
 
-This is a fork of the original [z80map by maziac](https://github.com/maziac/z80dismblr), which is no longer actively maintained. Development continues here with a focus on Amstrad CPC support, subroutine header banners with register analysis, and an iterative round-trip annotation workflow.
+This is a fork of the original [z80dismblr by maziac](https://github.com/maziac/z80dismblr), which is no longer actively maintained. Development continues here with a focus on Amstrad CPC support, subroutine header banners with register analysis, and an iterative round-trip annotation workflow.
 
 Key capabilities:
 
@@ -73,6 +73,13 @@ Key capabilities:
 
 ## 2. Installation & Build
 
+### 2.1 Prerequisites
+
+- **Node.js ≥ 18** — [nodejs.org](https://nodejs.org)
+- **npm** — bundled with Node.js
+
+### 2.2 Install and Compile
+
 ```bash
 # Install dependencies
 npm install
@@ -84,11 +91,59 @@ npm run compile
 npm test
 ```
 
-The entry point after compilation is `out/z80map.js`. You can invoke it with:
+The entry point after compilation is `out/z80map.js`. Invoke it with:
 
 ```bash
 node out/z80map.js [options]
 ```
+
+### 2.3 Standalone Executables (no Node.js required)
+
+Self-contained binaries can be produced using
+[`@yao-pkg/pkg`](https://github.com/yao-pkg/pkg), which bundles the Node.js
+runtime and the compiled JavaScript into a single executable. No Node.js
+installation is needed on the target machine.
+
+**Build all platforms in one command:**
+
+```bash
+npm run package
+```
+
+This compiles TypeScript and then packages for four targets:
+
+| Output file | Platform |
+|-------------|----------|
+| `z80map-linux` | Linux x86-64 |
+| `z80map-macos` | macOS x86-64 (Intel) |
+| `z80map-macos-arm64` | macOS ARM64 (Apple Silicon) |
+| `z80map-win.exe` | Windows x86-64 |
+
+**Usage after packaging:**
+
+```bash
+# Linux / macOS — make executable first if needed
+chmod +x z80map-linux
+./z80map-linux --args project.args
+
+# Windows
+z80map-win.exe --args project.args
+```
+
+**Build via VS Code:** run the **Build Executables** task from the VS Code
+Tasks panel (`Ctrl+Shift+P` → *Tasks: Run Task* → *Build Executables*). The
+task also zips each binary for distribution.
+
+**Manual packaging for a single target** (e.g. Linux only):
+
+```bash
+npm run compile
+npx @yao-pkg/pkg out/z80map.js --targets node20-linux-x64 --output z80map
+```
+
+Available target platforms: `linux`, `macos`, `win`.  
+Available architectures: `x64`, `arm64`.  
+Node version used for bundling: `node20` (matches `engines.node ≥ 18`).
 
 ---
 
