@@ -1,27 +1,24 @@
 {
   "name": "z80dismblr",
   "version": "2.4.0",
-  "publisher": "maziac",
-  "description": "A Z80 disassembler.",
+  "description": "A Z80 disassembler with iterative annotation workflow, Amstrad CPC firmware support, register analysis, and clean reassembleable output.",
   "main": "./out/z80dismblr.js",
   "scripts": {
     "compile": "tsc -p ./src",
-    "tslint": "eslint ./src/**/*.ts",
     "watch": "tsc -w -p ./src",
-    "test": "mocha -u tdd 'out/**/*.test{s,}.js'",
-    "package": "vsce package",
-    "publish": "vsce publish"
+    "test": "mocha -u tdd 'out/**/*.test{s,}.js'"
   },
-  "author": {
-    "name": "Thomas Busse"
-  },
+  "author": "Thomas Busse",
+  "contributors": [
+    "Christoph Linden"
+  ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/maziac/z80dismblr"
+    "url": "https://github.com/SerErris/z80dismblr"
   },
   "license": "MIT",
-  "dependencies": {
-    "ts-node": "^10.4.0"
+  "engines": {
+    "node": ">=18.0.0"
   },
   "devDependencies": {
     "@types/mocha": "9.0.0",
@@ -30,6 +27,7 @@
     "mocha": "^11.3.0",
     "serialize-javascript": "^7.0.5",
     "source-map-support": "^0.5.21",
+    "ts-node": "^10.4.0",
     "typescript": "^4.4.4"
   }
 }
