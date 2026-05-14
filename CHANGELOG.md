@@ -1,3 +1,11 @@
+## 3.0.1
+- Standalone executable build instructions added to user manual §2 (build, rename, and install to PATH for each platform; single-platform one-step packaging).
+- `npm run package` script added to `package.json`; VS Code *Build Executables* task updated from stale `node13` to `node20` targets using `@yao-pkg/pkg`, now including macOS ARM64.
+- All user manual examples updated to use the packaged `z80map` binary instead of `node out/z80map.js`; §3 Quick Start note added for source-based users.
+- `ai_reverse_engineering_guide.md` run commands updated to use `z80map`.
+- Design document `design/iterative_workflow.md` §10 added: manual line protection feature design (`;;{`/`;;}`  markers for user-overridable output blocks).
+
+
 ## 3.0.0
 - **Project renamed from `z80dismblr` to `z80map`.**  All source files, documentation, configuration, and npm package name updated. Entry point is now `out/z80map.js`. GitHub repository URLs (`maziac/z80dismblr`, `SerErris/z80dismblr`) are preserved as-is since the GitHub repos have not been renamed.
 - `package.json` cleaned up: removed stale VS Code extension fields (`publisher`, `vsce` scripts), moved `ts-node` to `devDependencies`, added `engines: { node: ">=18.0.0" }`, corrected author/contributors, updated repository URL.
