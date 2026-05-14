@@ -1,3 +1,7 @@
+## 3.1.1
+- **`--symbolsout` now includes user-supplied symbols from `--symbols` input files.** Previously, labels whose addresses fell outside the loaded binary (e.g. system firmware entry points like `KL_CHOKE_OFF`) were classified as EQU labels and silently omitted from `--symbolsout`. They now appear in the output merged by address alongside discovered labels, making the output file a usable round-trip base that preserves all named symbols.
+
+
 ## 3.1.0
 - **Manual line-protection blocks** — wrap any address range in `;;{ XXXX YYYY` / `;;}` markers (short form) or `;;PROTECT-START` / `;;PROTECT-END` (long form) to prevent the disassembler from regenerating that section. Content between the markers is preserved verbatim on every re-run. For `--cleanout` output, instruction and directive lines are extracted and emitted; comment lines are dropped. No `DEFB` is generated for the protected range. Labels inside the block are opaque (not registered in the symbol table). The block is idempotent across unlimited round-trips.
 - User manual §4.9 added documenting the feature, with syntax reference, behaviour table, and worked examples.

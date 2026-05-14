@@ -187,5 +187,20 @@ suite('A10 — writeSymbolsOut', () => {
             assert.strictEqual(lines[addrIdx - 1], '; exit-failure: —',
                 'exit-failure placeholder must immediately precede address line');
         });
+
+        test('user-supplied out-of-range (EQU) labels appear in --symbolsout', () => {
+            // Addresses outside the loaded binary become EQU labels. They must
+            // still appear in --symbolsout when the user explicitly named them
+            // via --symbols (isFixed=true).
+            const dasm = makeDasm();
+            // 0xBB00 is outside the 0x0000-0x0012 binary — becomes an EQU label.
+            dasm.setLabel(0xBB00, 'KL_CHOKE_OFF');
+            const lbl = dasm.labels.get(0xBB00);
+            lbl.isFixed = true;
+            dasm.disassemble();
+            const symbols: SymbolEntry[] = dasm.getSymbolsData();
+            const found = symbols.find((s: SymbolEntry) => s.name === 'KL_CHOKE_OFF');
+            assert.ok(found, 'isFixed EQU label must be included in getSymbolsData()');
+        });
     });
 });
