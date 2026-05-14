@@ -30,7 +30,17 @@ export type AsmEvent =
     | { kind: 'orphan-header'; address: number }  // ;; ORPHANED: $XXXX ...
     | { kind: 'orphan-label'; name: string }      // ;; LABEL: <name>
     | { kind: 'orphan-close' }                    // ;; (bare) — closes an orphan block
-    | { kind: 'other'; text: string };
+    | { kind: 'other'; text: string }
+    // ── Manual line-protection block markers (§10) ──────────────────────────
+    | { kind: 'protect-start'; startAddr: number; endAddr: number }
+    //   Short form:  ;;{ XXXX YYYY
+    //   Long form:   ;;PROTECT-START XXXX YYYY
+    | { kind: 'protect-end' }
+    //   Short form:  ;;}
+    //   Long form:   ;;PROTECT-END
+    | { kind: 'protect-content'; text: string };
+    //   Any line between protect-start and protect-end.
+    //   Only emitted by classifyAsmLines(); classifyLine() never produces it.
 
 
 // ---------------------------------------------------------------------------
@@ -87,6 +97,14 @@ const ORPHAN_HEADER_RE = /^;; ORPHANED: \$([0-9A-Fa-f]{4})/;
 /** Orphan label line: ';; LABEL: <name>' */
 const ORPHAN_LABEL_RE = /^;; LABEL: (\S+)$/;
 
+/**
+ * Manual protect-block start marker (§10).
+ * Short form:  `;;{ XXXX YYYY`
+ * Long form:   `;;PROTECT-START XXXX YYYY`
+ * Groups 1 and 2: start and end addresses (4-digit hex, both inclusive).
+ */
+const PROTECT_START_RE = /^;;(?:\{|PROTECT-START)\s+([0-9A-Fa-f]{4})\s+([0-9A-Fa-f]{4})/;
+
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -101,9 +119,19 @@ export function classifyLine(line: string): AsmEvent {
     if (line.trim() === '')
         return { kind: 'blank' };
 
-    // ';;' lines — orphan block markers (A8).  Must be tested before the
-    // single-semicolon comment check so ';;' is not mistaken for a comment.
+    // ';;' lines — protect markers (§10) and orphan block markers (A8).
+    // Protect markers are tested first so ';;{' / ';;PROTECT-START' are
+    // never confused with orphan syntax.
     if (line.startsWith(';;')) {
+        const protectMatch = PROTECT_START_RE.exec(line);
+        if (protectMatch)
+            return {
+                kind:      'protect-start',
+                startAddr: parseInt(protectMatch[1], 16),
+                endAddr:   parseInt(protectMatch[2], 16),
+            };
+        if (line.trimEnd() === ';;}' || /^;;PROTECT-END\b/.test(line))
+            return { kind: 'protect-end' };
         const headerMatch = ORPHAN_HEADER_RE.exec(line);
         if (headerMatch)
             return { kind: 'orphan-header', address: parseInt(headerMatch[1], 16) };
@@ -174,11 +202,27 @@ export function classifyLine(line: string): AsmEvent {
  * function; they are replaced by banner-open / banner-close pairs.
  */
 export function classifyAsmLines(lines: string[]): AsmEvent[] {
-    type State = 'normal' | 'banner-opened' | 'banner-titled' | 'banner-body';
+    type State = 'normal' | 'banner-opened' | 'banner-titled' | 'banner-body' | 'in-protect';
     const out: AsmEvent[] = [];
     let state: State = 'normal';
 
     for (const line of lines) {
+        // In-protect: preserve every line verbatim as protect-content; only
+        // the end marker (detected by classifyLine) exits this state.
+        if (state === 'in-protect') {
+            const ev = classifyLine(line);
+            if (ev.kind === 'protect-end') {
+                out.push({ kind: 'protect-end' });
+                state = 'normal';
+            } else {
+                // Emit raw text — do NOT emit the classified event, so that
+                // instruction / label / comment lines inside the block are
+                // not acted on by the round-trip consumer.
+                out.push({ kind: 'protect-content', text: line });
+            }
+            continue;
+        }
+
         const ev = classifyLine(line);
 
         switch (state) {
@@ -186,6 +230,9 @@ export function classifyAsmLines(lines: string[]): AsmEvent[] {
                 if (ev.kind === 'banner-rule') {
                     out.push({ kind: 'banner-open' });
                     state = 'banner-opened';
+                } else if (ev.kind === 'protect-start') {
+                    out.push(ev);
+                    state = 'in-protect';
                 } else {
                     out.push(ev);
                 }

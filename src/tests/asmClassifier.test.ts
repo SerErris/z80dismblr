@@ -725,3 +725,197 @@ suite('asmClassifier / A3 — banner block recognition', () => {
         });
     });
 });
+
+
+// ===========================================================================
+// §10 — manual line-protection markers
+// ===========================================================================
+
+suite('asmClassifier / classifyLine — protect markers', () => {
+
+    // ── protect-start: short form ──────────────────────────────────────────
+
+    test(';;{ short form: correct start and end addresses', () => {
+        const ev = classifyLine(';;{ C000 C010');
+        assert.deepStrictEqual(ev, { kind: 'protect-start', startAddr: 0xC000, endAddr: 0xC010 });
+    });
+
+    test(';;{ short form: lowercase hex', () => {
+        const ev = classifyLine(';;{ fb7e fb7f');
+        assert.deepStrictEqual(ev, { kind: 'protect-start', startAddr: 0xFB7E, endAddr: 0xFB7F });
+    });
+
+    test(';;{ short form: addresses at extremes (0000 and FFFF)', () => {
+        const ev = classifyLine(';;{ 0000 FFFF');
+        assert.deepStrictEqual(ev, { kind: 'protect-start', startAddr: 0x0000, endAddr: 0xFFFF });
+    });
+
+    test(';;{ short form: extra trailing whitespace accepted', () => {
+        assert.strictEqual(classifyLine(';;{ C000 C010   ').kind, 'protect-start');
+    });
+
+    // ── protect-start: long form ───────────────────────────────────────────
+
+    test(';;PROTECT-START long form: correct addresses', () => {
+        const ev = classifyLine(';;PROTECT-START C000 C010');
+        assert.deepStrictEqual(ev, { kind: 'protect-start', startAddr: 0xC000, endAddr: 0xC010 });
+    });
+
+    test(';;PROTECT-START long form: mixed case hex', () => {
+        const ev = classifyLine(';;PROTECT-START Fb7E fB7f');
+        assert.deepStrictEqual(ev, { kind: 'protect-start', startAddr: 0xFB7E, endAddr: 0xFB7F });
+    });
+
+    // ── protect-end: short form ────────────────────────────────────────────
+
+    test(';;}  short form: protect-end', () => {
+        assert.deepStrictEqual(classifyLine(';;}'), { kind: 'protect-end' });
+    });
+
+    test(';;}  with trailing whitespace: still protect-end', () => {
+        assert.deepStrictEqual(classifyLine(';;}  '), { kind: 'protect-end' });
+    });
+
+    // ── protect-end: long form ─────────────────────────────────────────────
+
+    test(';;PROTECT-END long form: protect-end', () => {
+        assert.deepStrictEqual(classifyLine(';;PROTECT-END'), { kind: 'protect-end' });
+    });
+
+    // ── does NOT conflict with orphan markers ──────────────────────────────
+
+    test('orphan-header still recognised after protect markers added', () => {
+        assert.strictEqual(classifyLine(';; ORPHANED: $BB00 KL_INIT').kind, 'orphan-header');
+    });
+
+    test('orphan-close ;; alone is not confused with protect-end', () => {
+        assert.strictEqual(classifyLine(';;').kind, 'orphan-close');
+    });
+
+    test(';; with trailing text (orphan-close) not confused with protect-end', () => {
+        assert.strictEqual(classifyLine(';; some note').kind, 'orphan-close');
+    });
+
+    // ── incomplete / malformed protect-start → falls through ──────────────
+
+    test(';;{ with only one address → not protect-start (orphan-close fallback)', () => {
+        assert.strictEqual(classifyLine(';;{ C000').kind, 'orphan-close');
+    });
+
+    test(';;{ with no addresses → orphan-close fallback', () => {
+        assert.strictEqual(classifyLine(';;{').kind, 'orphan-close');
+    });
+});
+
+
+suite('asmClassifier / classifyAsmLines — protect blocks', () => {
+
+    // ── basic round-trip ───────────────────────────────────────────────────
+
+    test('protect block emits start, content lines, end in order', () => {
+        const events = classifyAsmLines([
+            ';;{ C000 C005',
+            'C000 3E 01        LD   A,1',
+            '; a comment',
+            ';;}',
+        ]);
+        assert.strictEqual(events[0].kind, 'protect-start');
+        assert.strictEqual(events[1].kind, 'protect-content');
+        assert.strictEqual(events[2].kind, 'protect-content');
+        assert.strictEqual(events[3].kind, 'protect-end');
+        assert.strictEqual(events.length, 4);
+    });
+
+    test('protect-content carries verbatim text', () => {
+        const events = classifyAsmLines([
+            ';;{ C000 C005',
+            'C000 3E 01        LD   A,1          ;; init',
+            ';;}',
+        ]);
+        const content = events[1] as { kind: 'protect-content'; text: string };
+        assert.strictEqual(content.text, 'C000 3E 01        LD   A,1          ;; init');
+    });
+
+    test('long form markers work identically', () => {
+        const events = classifyAsmLines([
+            ';;PROTECT-START C000 C005',
+            'C000 C9           RET',
+            ';;PROTECT-END',
+        ]);
+        assert.strictEqual(events[0].kind, 'protect-start');
+        assert.strictEqual(events[1].kind, 'protect-content');
+        assert.strictEqual(events[2].kind, 'protect-end');
+    });
+
+    // ── protect-content is never re-classified ─────────────────────────────
+
+    test('instruction line inside block → protect-content, not instruction', () => {
+        const events = classifyAsmLines([
+            ';;{ C000 C005',
+            'C000 3E 01        LD   A,1',
+            ';;}',
+        ]);
+        assert.strictEqual(events[1].kind, 'protect-content');
+    });
+
+    test('label line inside block → protect-content, not label', () => {
+        const events = classifyAsmLines([
+            ';;{ C000 C005',
+            'C000 MY_LABEL:',
+            ';;}',
+        ]);
+        assert.strictEqual(events[1].kind, 'protect-content');
+    });
+
+    test('comment line inside block → protect-content, not free-comment', () => {
+        const events = classifyAsmLines([
+            ';;{ C000 C005',
+            '; a standalone comment',
+            ';;}',
+        ]);
+        assert.strictEqual(events[1].kind, 'protect-content');
+    });
+
+    test('blank line inside block → protect-content with empty text, not blank', () => {
+        const events = classifyAsmLines([
+            ';;{ C000 C005',
+            '',
+            ';;}',
+        ]);
+        assert.strictEqual(events[1].kind, 'protect-content');
+        assert.strictEqual((events[1] as any).text, '');
+    });
+
+    // ── surrounding context unaffected ─────────────────────────────────────
+
+    test('normal events before and after the protect block are unaffected', () => {
+        const events = classifyAsmLines([
+            'C000 MY_LABEL:',
+            ';;{ C001 C005',
+            'C001 C9           RET',
+            ';;}',
+            'C006 NEXT_LABEL:',
+        ]);
+        assert.strictEqual(events[0].kind, 'label');
+        assert.strictEqual(events[1].kind, 'protect-start');
+        assert.strictEqual(events[2].kind, 'protect-content');
+        assert.strictEqual(events[3].kind, 'protect-end');
+        assert.strictEqual(events[4].kind, 'label');
+    });
+
+    test('protect-start event carries the correct addresses', () => {
+        const events = classifyAsmLines([';;{ FB7E FB7F', 'C9  RET', ';;}']);
+        const ps = events[0] as { kind: 'protect-start'; startAddr: number; endAddr: number };
+        assert.strictEqual(ps.startAddr, 0xFB7E);
+        assert.strictEqual(ps.endAddr,   0xFB7F);
+    });
+
+    // ── empty protect block ────────────────────────────────────────────────
+
+    test('empty protect block (no content lines) is valid', () => {
+        const events = classifyAsmLines([';;{ C000 C005', ';;}']);
+        assert.strictEqual(events[0].kind, 'protect-start');
+        assert.strictEqual(events[1].kind, 'protect-end');
+        assert.strictEqual(events.length, 2);
+    });
+});
