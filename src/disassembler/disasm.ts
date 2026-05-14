@@ -3226,6 +3226,22 @@ export class Disassembler extends EventEmitter {
 					lines.push(...commentLines);
 				}
 
+				// Manual line-protection intercept (§10): if this address is the
+				// start of a protected block, emit the stored manual content
+				// verbatim and skip generating any auto-disassembly for the range.
+				// The auto-generated label for `address` was already emitted above.
+				const protBlock = this.protectedBlocks.get(address);
+				if (protBlock !== undefined) {
+					lines.push(';;{ ' + Format.getHexString(address, 4).toUpperCase()
+					         + ' '   + Format.getHexString(protBlock.endAddr, 4).toUpperCase());
+					for (const l of protBlock.lines)
+						lines.push(l);
+					lines.push(';;}');
+					prevMemoryAttribute = attr;
+					address = protBlock.endAddr + 1;
+					continue;
+				}
+
 				// Check if code or data should be disassembled
 				let addAddress;
 				let line;
