@@ -28,7 +28,8 @@ Key capabilities:
    - 4.2 [Editing the Output File](#42-editing-the-output-file)
    - 4.3 [Re-running the Disassembler](#43-re-running-the-disassembler)
    - 4.4 [What Is and Is Not Preserved](#44-what-is-and-is-not-preserved)
-   - 4.9 [Manual Line-Protection Blocks](#49-manual-line-protection-blocks)
+   - 4.9 [Promoting a Jump Target to a Subroutine](#49-promoting-a-jump-target-to-a-subroutine)
+   - 4.10 [Manual Line-Protection Blocks](#410-manual-line-protection-blocks)
 5. [Input Files](#5-input-files)
    - 5.1 [Binary Files (`--bin`)](#51-binary-files---bin)
    - 5.2 [ZX Spectrum Snapshots (`--sna`)](#52-zx-spectrum-snapshots---sna)
@@ -544,7 +545,28 @@ A practical rhythm for deep ROM analysis:
 
 At any time you can also run with `--cleanout` to produce a re-assembleable `.s` file, verify it assembles byte-for-byte, and use that to test your understanding of the ROM structure.
 
-### 4.9 Manual Line-Protection Blocks
+### 4.9 Promoting a Jump Target to a Subroutine
+
+The disassembler classifies a label as a subroutine (`CODE_SUB`) only when it is reached by a `CALL` instruction. Addresses reached solely by `jp` or `jp cc` are classified as jump targets (`CODE_LBL`) and receive no banner.
+
+This can be wrong. A common pattern in Z80 code is a **tail call** — a conditional or unconditional `jp` used as the last instruction of a subroutine to transfer control permanently to another routine that has its own entry parameters and return convention. From the disassembler's perspective, the target looks like an ordinary jump label.
+
+**How to fix it:** write `; type: sub` immediately before the label line in the `.asm` file:
+
+```
+; type: sub
+C344 cpm_cold_boot:
+C344 4F           ld   c,a    	;; load rom number
+```
+
+On the next run the disassembler promotes `cpm_cold_boot` to `CODE_SUB`, generates a skeleton banner, and removes the `; type: sub` marker. From then on the banner survives all subsequent runs like any other subroutine header.
+
+**Rules:**
+- The `; type: sub` line must be immediately adjacent to the label — no blank line between them.
+- Any other comments above `; type: sub` are discarded when the marker is seen; write them into the banner fields instead.
+- Once the banner exists, `; type: sub` is no longer needed — the banner itself locks the label as `CODE_SUB` on every subsequent round-trip.
+
+### 4.10 Manual Line-Protection Blocks
 
 Sometimes the static analyser cannot decode a region correctly — for example bytes that are copied to RAM and executed, Vortex-encrypted operands, or self-decrypting stubs. In these cases you can replace the auto-generated output for any address range with your own hand-written content, and have it survive every subsequent re-run unchanged.
 
