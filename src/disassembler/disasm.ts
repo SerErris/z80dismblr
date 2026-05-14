@@ -3138,7 +3138,16 @@ export class Disassembler extends EventEmitter {
 
 					// Disassemble the single opcode
 					const opCodeDescription = opcode.disassemble(this.memory);
-					line = this.formatDisassembly(address, opcode.length, opCodeDescription.mnemonic);
+					// P6: if this LD BC,nn has an exact-match port label substitution,
+					// replace the hex immediate with the label name in the mnemonic.
+					// The auto-generated "; #xxxx" comment is preserved for clarity.
+					let mnemonic = opCodeDescription.mnemonic;
+					const ldBcSub = this.ldBcPortSubstitutions.get(address);
+					if (ldBcSub) {
+						const hexStr = Format.formatHex(ldBcSub.address, 4);
+						mnemonic = mnemonic.replace(hexStr, ldBcSub.name);
+					}
+					line = this.formatDisassembly(address, opcode.length, mnemonic);
 					commentText = opCodeDescription.comment;
 					// Append port annotation for IN r,(C) / OUT (C),r (P5).
 					const ioAnnot = this.ioAnnotations.get(address);
