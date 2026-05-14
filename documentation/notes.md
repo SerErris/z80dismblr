@@ -11,24 +11,24 @@ This creates the binaries and zip files for uploading a release.
 Manually:
 Binaries erzeugen für Linux, Windows und macos:
 ~~~
-$ pkg out/z80dismblr.js
+$ pkg out/z80map.js
 ~~~
 Erzeugt:
 ~~~~
-z80dismblr-linux
-z80dismblr-macos
-z80dismblr-win.exe
+z80map-linux
+z80map-macos
+z80map-win.exe
 ~~~~
 alle ca. 35MB groß.
 
 Nur macos:
 ~~~
-$ pkg out/z80dismblr.js -t macos
+$ pkg out/z80map.js -t macos
 ~~~
 
 Benutzung:
 ~~~
-./z80dismblr-macos --sna src/tests/data/sw.sna  --uppercase --addbytes --callgraph out/tests/out2.dot --out out/tests/out2.asm --tr src/tests/data/sw.tr
+./z80map-macos --sna src/tests/data/sw.sna  --uppercase --addbytes --callgraph out/tests/out2.dot --out out/tests/out2.asm --tr src/tests/data/sw.tr
 ~~~
 
 

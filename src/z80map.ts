@@ -227,21 +227,21 @@ class Startup {
      */
     protected static printHelp() {
         console.log(`
-z80dismblr is a disassembler for Z80 code binaries. The disassembly will be
+z80map is a disassembler for Z80 code binaries. The disassembly will be
 simply written to stdout.
 
 Example usages:
 
-$ z80dismblr --sna myfile.sna --out myfile.list
+$ z80map --sna myfile.sna --out myfile.list
 This will write the disassembly of the snapshot file 'myfile.sna' to file 'myfile.list'.
 
-$ z80dismblr --bin 0x8000 myfile.obj --codelabel 0x9000 --out myfile.list
+$ z80map --bin 0x8000 myfile.obj --codelabel 0x9000 --out myfile.list
 This will write the disassembly of the binary file file 'myfile.obj' to file 'myfile.list'.
 The binary file starts at address 0x8000 and the code entry point start at
 0x9000 (i.e. here begins the code area).
 
 General usage:
-z80dismblr [options]
+z80map [options]
     -h|-help|--help: Prints this help.
     -v|-version|--version: Prints the version number.
     --args file: Instead of an argument list on the command line it is also possible
@@ -252,7 +252,7 @@ z80dismblr [options]
     You can use this argument several times to read inseveral binary files.
         --codelabel or --tr is mandatory to
         obtain any disassembly results.
-    --out file: Output file. z80dismblr will write the disassembly here.
+    --out file: Output file. z80map will write the disassembly here.
     --tr file: Add a MAME trace file. This can be used instead of --codelabel.
         Providing a trace file will increase the quality of the
         disassembly output.

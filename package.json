@@ -1,8 +1,8 @@
 {
-  "name": "z80dismblr",
+  "name": "z80map",
   "version": "2.4.0",
   "description": "A Z80 disassembler with iterative annotation workflow, Amstrad CPC firmware support, register analysis, and clean reassembleable output.",
-  "main": "./out/z80dismblr.js",
+  "main": "./out/z80map.js",
   "scripts": {
     "compile": "tsc -p ./src",
     "watch": "tsc -w -p ./src",

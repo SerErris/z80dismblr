@@ -224,7 +224,7 @@ export class CleanEmitter {
 			const opcode = Opcode.getOpcodeAt(memory, addr);
 			if (opcode.isNextOpcode) {
 				const hex = '$' + addr.toString(16).toUpperCase().padStart(4, '0');
-				throw `z80dismblr: --cleanout-format maxam: this binary contains ZX Next opcodes\nwhich maxam does not support. Use --cleanout-format sjasmplus instead.\nFirst ZX Next opcode found at address ${hex}.`;
+				throw `z80map: --cleanout-format maxam: this binary contains ZX Next opcodes\nwhich maxam does not support. Use --cleanout-format sjasmplus instead.\nFirst ZX Next opcode found at address ${hex}.`;
 			}
 		}
 	}
@@ -240,7 +240,7 @@ export class CleanEmitter {
 			if (label.isEqu || !label.name) continue;
 			if (reserved.has(label.name.toLowerCase())) {
 				const hex = '$' + addr.toString(16).toUpperCase().padStart(4, '0');
-				throw `z80dismblr: label '${label.name}' at ${hex} is a reserved word in ${this.format}.\nRename the label and try again.`;
+				throw `z80map: label '${label.name}' at ${hex} is a reserved word in ${this.format}.\nRename the label and try again.`;
 			}
 		}
 	}

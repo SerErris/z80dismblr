@@ -7,7 +7,7 @@ DATA="src/tests/data"
 
 # ── Step 6.2 — Disassemble ──────────────────────────────────────────────────
 echo "6.2  Disassembling..."
-node out/z80dismblr.js \
+node out/z80map.js \
     --bin 0xC000 "$DATA/smoke_test_block1.bin" \
     --bin 0xC200 "$DATA/smoke_test_block2.bin" \
     --codelabel 0xC006 cmd_jp_table \

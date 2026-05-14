@@ -5,7 +5,7 @@ for the `cleanout_smoke_test.md` procedure.  Its only purpose is to
 exercise every clean-emitter code path so that:
 
 - `firmware_test.s` → `sjasmplus` → `firmware_test.bin` →
-  `z80dismblr --machine cpc --cleanout smoke_test_out.s` → `sjasmplus` →
+  `z80map --machine cpc --cleanout smoke_test_out.s` → `sjasmplus` →
   `smoke_test_out.bin` must equal `firmware_test.bin` **byte for byte**.
 - Any emitter path not exercised here is a coverage gap that will
   silently escape the smoke test — so we list every feature up front
@@ -559,7 +559,7 @@ sjasmplus src/tests/data/smoke_test.s
 #    All data sections from banner_msg through rsx_names are contiguous, so
 #    they collapse into a single --datarange.
 #
-node out/z80dismblr.js \
+node out/z80map.js \
     --bin 0xC000 src/tests/data/smoke_test_block1.bin \
     --bin 0xC200 src/tests/data/smoke_test_block2.bin \
     \

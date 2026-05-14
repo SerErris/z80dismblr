@@ -1,8 +1,8 @@
-# z80dismblr
+# z80map
 
-z80dismblr is a Z80 command line disassembler written in TypeScript.
+z80map is a Z80 command line disassembler written in TypeScript.
 
-This is a fork of the original [z80dismblr](https://github.com/maziac/z80dismblr) project by maziac, which is no longer actively maintained. Development continues here with a focus on Amstrad CPC support and enhanced disassembly features.
+This is a fork of the original [z80map](https://github.com/maziac/z80dismblr) project by maziac, which is no longer actively maintained. Development continues here with a focus on Amstrad CPC support and enhanced disassembly features.
 
 
 ## Features
@@ -52,7 +52,7 @@ _Note: Usage is shown here for MacOS only, it should work similar for Linux and 
 
 To create an assembler listing for the snapshot file 'myfile.sna' just use:
 ~~~
-$ ./z80dismblr-macos --sna myfile.sna --out myfile.list
+$ ./z80map-macos --sna myfile.sna --out myfile.list
 ~~~
 
 It reads in the file (which is in SNA file format) and writes it to the 'myfile.list' file.
@@ -88,7 +88,7 @@ You can also read in binary files (without headers), e.g. MAME roms.
 For binary files you have to provide additional info of the offset address
 of the loaded file.
 ~~~
-$ ./z80dismblr-macos --bin 0 rom1.bin --bin 0x1000 rom2.bin --bin 0x2000 rom3.bin --codelabel 0x800 MAIN_START --out roms.list
+$ ./z80map-macos --bin 0 rom1.bin --bin 0x1000 rom2.bin --bin 0x2000 rom3.bin --codelabel 0x800 MAIN_START --out roms.list
 ~~~
 This will load 3 binary files (rom1.bin, rom2.bin and rom3.bin).
 rom1.bin starts at address 0, rom2.bin at address 0x1000 and rom3.bin at address 0x2000.
@@ -98,7 +98,7 @@ If you know nothing about the code the better way will be to provide a MAME trac
 and save it to a file, e.g. myfile.tr.
 Now you start a disassembly and provide the file:
 ~~~
-$ ./z80dismblr-macos --bin 0 rom1.bin --bin 0x1000 rom2.bin --bin 0x2000 rom3.bin --tr myfile.tr --out roms.list
+$ ./z80map-macos --bin 0 rom1.bin --bin 0x1000 rom2.bin --bin 0x2000 rom3.bin --tr myfile.tr --out roms.list
 ~~~
 Note that you can but you don't have to provide a `--codelabel` in this case.
 
@@ -108,7 +108,7 @@ You can highly customize the appearance of the output, e.g. you can suppress the
 
 Please use
 ~~~
-$ ./z80dismblr-macos -h
+$ ./z80map-macos -h
 ~~~
 to print a help for all allowed arguments.
 
@@ -128,7 +128,7 @@ $ cat argsfile
 ~~~
 
 ~~~
-$ ./z80dismblr-macos --args argsfile --out roms.list
+$ ./z80map-macos --args argsfile --out roms.list
 ~~~
 
 
@@ -219,7 +219,7 @@ subroutines, then fill in the structured fields incrementally.
 
 ## Statistics
 
-Apart from the disassembly output with the labels and the mnemonics z80dismblr also prints out a few statistics in the comments.
+Apart from the disassembly output with the labels and the mnemonics z80map also prints out a few statistics in the comments.
 For each subroutine it lists the callers and callees, the size in bytes, the cyclomatic complexity (CC), and the auto-detected Corrupted/Preserved register lists.
 
 The Registers fields are computed by static analysis:
@@ -257,7 +257,7 @@ disassembler **cannot resolve which routine a CPC-style RST actually calls**
 without running the code on real hardware. The ROM itself has no way of
 knowing which slot number it occupies.
 
-For this reason z80dismblr treats CPC RST targets the same as ordinary
+For this reason z80map treats CPC RST targets the same as ordinary
 subroutines in the banner display (using `sub` rather than `rst` as the
 banner prefix) and does **not** attempt to follow the far-call dispatch.
 This avoids generating authoritative-looking but incorrect cross-references.
@@ -267,7 +267,7 @@ a specific RST address entirely, which is useful if the RST handler lives
 in ROM that was not loaded:
 
 ~~~
-$ ./z80dismblr-macos --bin 0 cpc_rom.bin --rstend 0x0018 --out cpc.list
+$ ./z80map-macos --bin 0 cpc_rom.bin --rstend 0x0018 --out cpc.list
 ~~~
 
 The `--opcode` argument can be used to annotate the bytes that follow a
@@ -275,7 +275,7 @@ CPC RST with a descriptive name, making the listing more readable even
 though the target cannot be resolved:
 
 ~~~
-$ ./z80dismblr-macos --bin 0 cpc_rom.bin --opcode 0xDF ",FUNC=#nn" --out cpc.list
+$ ./z80map-macos --bin 0 cpc_rom.bin --opcode 0xDF ",FUNC=#nn" --out cpc.list
 ~~~
 
 
@@ -283,11 +283,11 @@ $ ./z80dismblr-macos --bin 0 cpc_rom.bin --opcode 0xDF ",FUNC=#nn" --out cpc.lis
 
 ### Caller Graphs
 
-With the `--callgraphout` option it is possible to let z80dismblr create `.dot` files for use with [Graphviz](http://www.graphviz.org).
+With the `--callgraphout` option it is possible to let z80map create `.dot` files for use with [Graphviz](http://www.graphviz.org).
 
-Here is an example for the program "Star Warrior" (48K ZX Spectrum). Use z80dismblr like this:
+Here is an example for the program "Star Warrior" (48K ZX Spectrum). Use z80map like this:
 ~~~
-$ ./z80dismblr-macos --sna starwarrior.sna --out starwarrior.list --callgraphout starwarrior.dot
+$ ./z80map-macos --sna starwarrior.sna --out starwarrior.list --callgraphout starwarrior.dot
 ~~~
 
 It will generate the 'starwarrior.dot' file from the SNA file.
@@ -314,13 +314,13 @@ The highlighted roots:
 
 #### Sub Call Graphs
 
-It is also possible to let z80dismblr generate only a part of the caller graphs e.g. to focus on a certain subroutine.
+It is also possible to let z80map generate only a part of the caller graphs e.g. to focus on a certain subroutine.
 
-For this add `--noautomaticaddr` to the commandline. This will prevent z80dismblr from using address 0000 or the SNA start address automatically.
+For this add `--noautomaticaddr` to the commandline. This will prevent z80map from using address 0000 or the SNA start address automatically.
 
 Additionally add the address of the subroutine you want to see with a `--codelabel` option:
 ~~~
-$ ./z80dismblr-macos --sna starwarrior.sna --callgraphout starwarrior.dot --noautomaticaddr --codelabel 0x735E SUB19
+$ ./z80map-macos --sna starwarrior.sna --callgraphout starwarrior.dot --noautomaticaddr --codelabel 0x735E SUB19
 ~~~
 You can additionally add a label name (here we chose "SUB19" so that it is the same name as in the big caller graph diagram).
 You can get the address from the previously created 'starwarrior.list' file.
@@ -340,7 +340,7 @@ With `--flowchartaddresses addr1 addr2 ... addrN` you can specify one or more su
 
 E.g.:
 ~~~
-$ ./z80dismblr-macos --sna starwarrior.sna --flowchartout fc.dot --flowchartaddresses 7015h A3ABh
+$ ./z80map-macos --sna starwarrior.sna --flowchartout fc.dot --flowchartaddresses 7015h A3ABh
 ~~~
 will create the following graph:
 
@@ -350,7 +350,7 @@ will create the following graph:
 ## "Interactive" Usage
 
 During reverse engineering of a binary at first very little is known about the code.
-Then after looking at the disassembly the one or the other subroutine is understood and can be commented with more senseful comments than the one that z80dismblr generates.
+Then after looking at the disassembly the one or the other subroutine is understood and can be commented with more senseful comments than the one that z80map generates.
 
 Therefore you can input a file with labels and comments via the `--comments file` option.
 
@@ -430,22 +430,22 @@ This results in the more readable disassembly:
 
 ## Recommendations
 
-If you know nothing about the binary that you disassemble the output of the z80dismblr might be disappointing.
+If you know nothing about the binary that you disassemble the output of the z80map might be disappointing.
 According to the way how it executes the disassembly (see [How it works](#how-it-works)) it can easily happen that not all code paths are found.
 
 Thus the more you know about the code and the more `--codelabel` entries you can pass as arguments the better.
 
 If you still don't know nothing about the binary then you should get a trace file e.g. from MAME. This trace file is obtained from the MAME debugger while executing the binary.
 It's format is a simple disassembly with the first number being the hex address (in ASCII) followed by the disassembly of the executed code.
-z80dismblr does mainly look for the hex address and assumes all of these addresses to be CODE area that need to be disassembled. It only looks into the disassembly part of the trace file to find `jp (hl)` instructions. It uses those to define the right references to the labels.
+z80map does mainly look for the hex address and assumes all of these addresses to be CODE area that need to be disassembled. It only looks into the disassembly part of the trace file to find `jp (hl)` instructions. It uses those to define the right references to the labels.
 
 Please note that using a trace file can result in surprising issues in case of self modifying code.
-As z80dismblr doesn't know about dynamic changes you might find code areas with senseless opcodes (or NOPs). This is because the code is re-written by the assembler program during runtime. For code based on ROMs this shouldn't happen, but for code that resides in RAM (e.g. ZX Spectrum programs) this can be an issue.
+As z80map doesn't know about dynamic changes you might find code areas with senseless opcodes (or NOPs). This is because the code is re-written by the assembler program during runtime. For code based on ROMs this shouldn't happen, but for code that resides in RAM (e.g. ZX Spectrum programs) this can be an issue.
 
 
 ## How It Works
 
-The z80dismblr uses a [Control-Flow-Graph](https://en.wikipedia.org/wiki/Control_flow_graph) (CFG) to analyze the binary file(s).
+The z80map uses a [Control-Flow-Graph](https://en.wikipedia.org/wiki/Control_flow_graph) (CFG) to analyze the binary file(s).
 I.e. it runs through the code through all possible paths and disassembles it.
 
 Consider the following example:
@@ -468,7 +468,7 @@ Consider the following example:
 0018h FF           ??
 ~~~
 
-If z80dismblr is told to start at address 0008h it steps through the code until a branch (JR, JR cc, JP, JP cc, CALL or CALL cc) is found.
+If z80map is told to start at address 0008h it steps through the code until a branch (JR, JR cc, JP, JP cc, CALL or CALL cc) is found.
 It then uses the new address as another start point to opcodes.
 Depending on the branch instruction it continues to disassemble at the following address or stops (e.g. JP unconditional).
 
@@ -571,7 +571,7 @@ START:
              CALL SUB2
              RET
 ~~~
-I.e. z80dismblr will only treat "LD B,34" and "LD D,1" as belonging to SUB1.
+I.e. z80map will only treat "LD B,34" and "LD D,1" as belonging to SUB1.
 "LD A,33" and the following "RET" belong to SUB2.
 Additionally it adds a reference from SUB1 to SUB2 because SUB1 flows-through/calls
 SUB2. The references can be found in the comments output of the disassembler.
@@ -581,7 +581,7 @@ SUB2. The references can be found in the comments output of the disassembler.
 
 ### Opcode Extensions
 
-It is possible to tweak some opcodes a little bit. I.e. it is possible to instruct z80dismblr to treat the data following the opcode in a special way and add it to the disassembly text of the preceding opcode.
+It is possible to tweak some opcodes a little bit. I.e. it is possible to instruct z80map to treat the data following the opcode in a special way and add it to the disassembly text of the preceding opcode.
 
 E.g. consider the following assembler listing
 
@@ -606,7 +606,7 @@ RST 08h, CODE=3Eh  	; Custom opcode
 LD HL,1234h
 ~~~
 
-Please note that without the extended opcode z80dismblr would have interpreted the 3Eh as an opcode. Now it ignores it and the disassembly continues at "LD HL,1234h".
+Please note that without the extended opcode z80map would have interpreted the 3Eh as an opcode. Now it ignores it and the disassembly continues at "LD HL,1234h".
 
 
 ---

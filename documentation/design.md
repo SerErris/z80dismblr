@@ -207,7 +207,7 @@ formatting.
 
 The `--out` file is designed for iterative editing:
 
-1. **First run**: `z80dismblr --bin … --out rom.asm` — produces annotated listing with auto-generated headers.
+1. **First run**: `z80map --bin … --out rom.asm` — produces annotated listing with auto-generated headers.
 2. **Edit**: User renames labels, adds `; summary:` / `; action:` / `; entry:` / `; exit-success:` / `; exit-failure:` structured fields inside the banner, and adds inline comments with `;;`.
 3. **Next run**: Same command with the same `--out` file — the disassembler re-reads its own output, preserves user edits (names, structured fields, `;;` comments), and regenerates the auto parts (register analysis, call lists, statistics).
 

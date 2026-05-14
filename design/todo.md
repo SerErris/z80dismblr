@@ -1,4 +1,4 @@
-# z80dismblr — Future Work
+# z80map — Future Work
 
 Quick-reference list of planned features and the detailed notes below.
 Each item links to the relevant design document section for full context.
@@ -35,7 +35,7 @@ annotations.
 The re-run command is always the same — no extra flags required:
 
 ```
-$ z80dismblr --bin rom.bin --symbols cpc_bios.sym --out rom.asm
+$ z80map --bin rom.bin --symbols cpc_bios.sym --out rom.asm
 ```
 
 On the first run `rom.asm` does not exist; it is created fresh.
@@ -100,7 +100,7 @@ overwriting.
   machine into a two-stage classifier/consumer. This is the right
   approach — do not extend the existing state machine further.
 - `--fresh` and the auto-import rule are pure CLI-layer additions
-  (`z80dismblr.ts`); they require no change to the core disassembler.
+  (`z80map.ts`); they require no change to the core disassembler.
 
 ---
 
@@ -116,7 +116,7 @@ file stripped of all commentary. The output can be fed directly into
 byte-for-byte.
 
 ```
-$ z80dismblr --bin rom.bin --out rom.asm \
+$ z80map --bin rom.bin --out rom.asm \
              --cleanout rom.s --cleanout-format sjasmplus
 ```
 
@@ -725,7 +725,7 @@ booleans, a single `--machine <name>` slot keeps the CLI focused.
 
 ### Notes for resuming
 
-- The flag is consumed in exactly one place (`z80dismblr.ts` case handler).
+- The flag is consumed in exactly one place (`z80map.ts` case handler).
   Call sites of `dasm.cpcMode` are in `disasm.ts`, `cleanEmitter.ts`, and
   `cpcRst.ts` — grep covers them.
 - Before implementing, grep the whole repository (not just `src/`) for

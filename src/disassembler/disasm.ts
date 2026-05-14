@@ -1000,9 +1000,9 @@ export class Disassembler extends EventEmitter {
 	/**
 	 * Finds interrupt labels. I.e. start of program code
 	 * that doesn't have any label yet.
-	 * As z80dismblr uses CFG analysis this can normally not happen.
+	 * As z80map uses CFG analysis this can normally not happen.
 	 * But if you e.g. provide a trace (tr) file this also includes interrupt traces.
-	 * So z80dismblr will also follow these paths, but since there
+	 * So z80map will also follow these paths, but since there
 	 * is no label associated this code would be presented without 'Start' label.
 	 * 'findInterruptLabels' finds these code parts and assigns a label.
 	 * Several rules are used:

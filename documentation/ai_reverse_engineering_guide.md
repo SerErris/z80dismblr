@@ -1,7 +1,7 @@
-# Using Claude Code with z80dismblr — Reverse-Engineering Guide
+# Using Claude Code with z80map — Reverse-Engineering Guide
 
 This document is a template for AI-assisted Z80 ROM reverse engineering using
-z80dismblr. Drop a copy into the `research/` folder of your project, fill in
+z80map. Drop a copy into the `research/` folder of your project, fill in
 the placeholders, and use it as context for Claude Code sessions.
 
 ---
@@ -29,7 +29,7 @@ the placeholders, and use it as context for Claude Code sessions.
 **Always run via the args file:**
 
 ```bash
-node /path/to/z80dismblr/out/z80dismblr.js --args project.args
+node /path/to/z80map/out/z80map.js --args project.args
 ```
 
 Every option is in `project.args`. The command does not change between runs.
@@ -104,7 +104,7 @@ project. The project lives at `~/reverse_eng/vortex/`.
 
 **Run from `~/reverse_eng/vortex/`:**
 ```bash
-node ~/z80dismblr/out/z80dismblr.js --args project.args
+node ~/z80map/out/z80map.js --args project.args
 ```
 
 ---
@@ -233,7 +233,7 @@ Any `;` lines placed immediately above a label are preserved verbatim:
 ### Running the disassembler
 
 ```bash
-node ~/z80dismblr/out/z80dismblr.js --args project.args
+node ~/z80map/out/z80map.js --args project.args
 ```
 
 Run this whenever you want to regenerate the listing (e.g. after adding entries

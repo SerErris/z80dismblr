@@ -23,7 +23,7 @@
             "type": "node",
             "request": "launch",
             "name": "Launch Program",
-			"program": "${workspaceFolder}/out/z80dismblr.js",
+			"program": "${workspaceFolder}/out/z80map.js",
 			//"cwd": "${workspaceFolder}/../asm/zxnext_game_framework",
 			"cwd": "${workspaceFolder}",
 			"args": [

@@ -16,7 +16,7 @@ binary under both supported assemblers.
 |------|-----------------|---------|
 | `sjasmplus` | 1.20+ | https://github.com/z00m128/sjasmplus/releases |
 | `maxam` / WinApe | any recent | https://www.winape.net |
-| `z80dismblr` | current build | `npm run compile` |
+| `z80map` | current build | `npm run compile` |
 | a known test binary | — | e.g. `test/fixtures/firmware.bin` |
 
 ---
@@ -26,7 +26,7 @@ binary under both supported assemblers.
 ### 1. Disassemble to clean source (sjasmplus)
 
 ```sh
-node out/z80dismblr.js \
+node out/z80map.js \
   --bin 0x0000 firmware.bin \
   --codelabel 0x0000 START \
   --cleanout firmware_sjas.s \
@@ -52,7 +52,7 @@ Expected: no output (identical).
 ### 4. Disassemble to clean source (maxam)
 
 ```sh
-node out/z80dismblr.js \
+node out/z80map.js \
   --bin 0x0000 firmware.bin \
   --codelabel 0x0000 START \
   --cleanout firmware_maxam.s \

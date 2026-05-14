@@ -1,6 +1,6 @@
 # Amstrad CPC Architecture
 
-This document captures technical details of the Amstrad CPC relevant to ROM analysis with z80dismblr, including required configuration hints for `--comments`, `--codelabel`, and related options.
+This document captures technical details of the Amstrad CPC relevant to ROM analysis with z80map, including required configuration hints for `--comments`, `--codelabel`, and related options.
 
 ---
 
@@ -175,7 +175,7 @@ Used when a foreground program (BASIC or other) invokes a background ROM or RSX 
 
 ---
 
-## 8. z80dismblr Configuration Notes
+## 8. z80map Configuration Notes
 
 ### Data Labels (`--datalabel`) vs Data Ranges (`--datarange`)
 
@@ -234,13 +234,13 @@ Code tracing starts at `#C006` (jumpblock entry 0). Pass this as the first `--co
 On the first pass, use `--commentsout` to capture auto-discovered labels (e.g. FAR CALL targets) in comments file format:
 
 ```
-z80dismblr --bin 0xC000 amsdos.rom --machine cpc --codelabel 0xC006 --commentsout discovered.comments
+z80map --bin 0xC000 amsdos.rom --machine cpc --codelabel 0xC006 --commentsout discovered.comments
 ```
 
 Review `discovered.comments`, annotate the entries, and merge them into your main comments file. Subsequent passes use only `--comments`:
 
 ```
-z80dismblr --bin 0xC000 amsdos.rom --machine cpc --codelabel 0xC006 --comments amsdos.comments
+z80map --bin 0xC000 amsdos.rom --machine cpc --codelabel 0xC006 --comments amsdos.comments
 ```
 
 Any `datarange` entries discovered during the pass are emitted as commented-out `--datarange` hints in the `--commentsout` file — add those to a separate `--args` file.

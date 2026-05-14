@@ -26,7 +26,7 @@
             "command": "zsh",
             "args": [
                 "-c",
-                "rm *.zip; pkg -t node13-macos,node13-linux,node13-win out/z80dismblr.js && zip z80dismblr-linux.zip z80dismblr-linux && zip z80dismblr-macos.zip z80dismblr-macos && zip z80dismblr-win.zip z80dismblr-win.exe"
+                "rm *.zip; pkg -t node13-macos,node13-linux,node13-win out/z80map.js && zip z80map-linux.zip z80map-linux && zip z80map-macos.zip z80map-macos && zip z80map-win.zip z80map-win.exe"
             ],
             "problemMatcher": []
         },
