@@ -9,7 +9,7 @@ import {DisLabel} from './dislabel';
 import {Comment} from './comment';
 import {SubroutineStatistics} from './statistics';
 import {EventEmitter} from 'events';
-import {Format} from './format';
+import {Format, HexFormat} from './format';
 import {readFileSync} from 'fs';
 import {classifyAsmFile, AsmEvent} from './asmClassifier';
 import {CPC_RST, analyzeCpcRst, formatCpcRst} from './cpcRst';
@@ -3140,6 +3140,16 @@ export class Disassembler extends EventEmitter {
 					const opCodeDescription = opcode.disassemble(this.memory);
 					line = this.formatDisassembly(address, opcode.length, opCodeDescription.mnemonic);
 					commentText = opCodeDescription.comment;
+					// Append port annotation for IN r,(C) / OUT (C),r (P5).
+					const ioAnnot = this.ioAnnotations.get(address);
+					if (ioAnnot) {
+						const portStr = this.portAnnotationText(ioAnnot);
+						if (portStr) {
+							commentText = commentText
+								? commentText + ', ' + portStr
+								: portStr;
+						}
+					}
 					addAddress = opcode.length;
 				}
 
@@ -3219,6 +3229,49 @@ export class Disassembler extends EventEmitter {
 
 		// Return
 		return lines;
+	}
+
+
+	/**
+	 * Builds the `Port #xxxx` inline-comment string for an I/O annotation.
+	 *
+	 * Format: `Port #xxxx` (no label) or `Port #xxxx (NAME)` (label found).
+	 * When only one byte is known the other is rendered as `??` and a
+	 * qualifier is appended:  `Port #7F?? (GATE_ARRAY, low byte unknown)`.
+	 *
+	 * Hex style follows the user's `--hexformat` setting.
+	 */
+	protected portAnnotationText(annot: IoAnnotation): string {
+		const {b, c} = annot.bcState;
+		if (b === undefined && c === undefined) return '';
+
+		const partial = b === undefined ? ', high byte unknown'
+		              : c === undefined ? ', low byte unknown'
+		              : '';
+
+		let hexStr: string;
+		if (b !== undefined && c !== undefined) {
+			hexStr = Format.formatHex((b << 8) | c, 4);
+		}
+		else {
+			// One byte unknown: render as 4-char hex+wildcards with the
+			// current prefix/suffix applied manually.
+			const bStr = b !== undefined ? Format.getHexString(b, 2) : '??';
+			const cStr = c !== undefined ? Format.getHexString(c, 2) : '??';
+			const raw  = bStr + cStr;
+			switch (Format.hexFormat) {
+				case HexFormat.CPC:    hexStr = '#'  + raw;       break;
+				case HexFormat.Z80:    hexStr = '$'  + raw;       break;
+				case HexFormat.C:      hexStr = '0x' + raw;       break;
+				case HexFormat.AMP:    hexStr = '&'  + raw;       break;
+				case HexFormat.INTEL0: hexStr = '0'  + raw + 'h'; break;
+				default:               hexStr =        raw + 'h'; break;
+			}
+		}
+
+		if (annot.portLabel)
+			return 'Port ' + hexStr + ' (' + annot.portLabel.name + partial + ')';
+		return 'Port ' + hexStr + (partial ? ' (' + partial.slice(2) + ')' : '');
 	}
 
 
