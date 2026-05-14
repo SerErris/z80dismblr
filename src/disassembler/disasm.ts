@@ -14,6 +14,7 @@ import {readFileSync} from 'fs';
 import {classifyAsmFile, AsmEvent} from './asmClassifier';
 import {CPC_RST, analyzeCpcRst, formatCpcRst} from './cpcRst';
 import {DiscoveredEntry} from './argsWriter';
+import {PortLabel, parsePortAddress} from './portLabel';
 import {StructuredFields, Z80Register} from './registerAnalysis';
 import {RegAnalyzer, AnalyserContext} from './reganalyzer';
 import {
@@ -147,6 +148,12 @@ export class Disassembler extends EventEmitter {
 	/// Target machine selector. Drives machine-specific decoding (CPC RST
 	/// dispatch, FAR CALL pointer records, …). Selected via `--machine <name>`.
 	public machine: 'none' | 'cpc' = 'none';
+
+	/// I/O port labels declared by the user via `port:XXXX NAME` entries in
+	/// the --symbols file. Strictly separate from the memory `labels` map
+	/// (port #F400 ≠ memory #F400). Supports wildcards via mask. See
+	/// design/todo.md §3.
+	public portLabels: Array<PortLabel> = [];
 
 	/// Entries collected for --argsout: user-provided --datalabel/--datarange entries
 	/// plus any entries discovered automatically during disassembly (e.g. CPC RST analysis).
@@ -2711,6 +2718,28 @@ export class Disassembler extends EventEmitter {
 					break;
 				}
 				case State.lineOn:
+					// Port declaration: `port:XXXX NAME` (X is hex digit or `?` wildcard).
+					// Handled before the regular address parser so the `port:` prefix
+					// isn't interpreted as a hex literal. Port lines are self-contained
+					// and do not participate in the address-comment state machine.
+					if (addressPart.trim().startsWith('port:')) {
+						const portMatch = /^port:([0-9a-fA-F?]{4})\s+([\w.]+)\s*$/.exec(addressPart.trim());
+						if (!portMatch) {
+							throw Error(
+								`Malformed port declaration at ${commentsFile}:${lineNr}: "${line}".\n`
+								+ `Expected: port:XXXX NAME, where each X is a hex digit or '?' wildcard.`
+							);
+						}
+						const {address, mask} = parsePortAddress(portMatch[1]);
+						this.portLabels.push({address, mask, name: portMatch[2]});
+						// Reset comment-block state and return to LinesBefore so consecutive
+						// port declarations work and any preceding `;` comments are discarded.
+						comment = new Comment();
+						structured = {};
+						currentMarker = undefined;
+						state = State.LinesBefore;
+						break;
+					}
 					comment.inlineComment = commentPart;
 					// Determine address and label
 					const match2 = /^(0x)?([0-9a-f]+)(\s+([\w\.]+))?/i.exec(addressPart);
