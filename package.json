@@ -8,9 +8,9 @@
     "watch": "tsc -w -p ./src",
     "test": "mocha -u tdd 'out/**/*.test{s,}.js'"
   },
-  "author": "Thomas Busse",
+  "author": "Christoph Linden",
   "contributors": [
-    "Christoph Linden"
+    "Thomas Busse (original author, maziac/z80dismblr)"
   ],
   "repository": {
     "type": "git",
