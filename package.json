@@ -1,6 +1,6 @@
 {
   "name": "z80dismblr",
-  "version": "2.1.0",
+  "version": "2.4.0",
   "publisher": "maziac",
   "description": "A Z80 disassembler.",
   "main": "./out/z80dismblr.js",
