@@ -192,6 +192,11 @@ export class Disassembler extends EventEmitter {
 	/// (P6). Keyed by the `LD BC,nn` address; value = the port label.
 	public ldBcPortSubstitutions: Map<number, PortLabel> = new Map();
 
+	/// Manual line-protection blocks imported from the .asm file (§10).
+	/// Keyed by the first protected address (inclusive). Value holds the last
+	/// protected address and the verbatim content lines to re-emit.
+	public protectedBlocks: Map<number, {endAddr: number; lines: string[]}> = new Map();
+
 	/// Entries collected for --argsout: user-provided --datalabel/--datarange entries
 	/// plus any entries discovered automatically during disassembly (e.g. CPC RST analysis).
 	public discovered = new Array<DiscoveredEntry>();
@@ -462,6 +467,7 @@ export class Disassembler extends EventEmitter {
 		this.addressComments = new Map<number, Comment>();
 		this.importedAddresses = new Set<number>();
 		this.addressInlineComments = new Map();
+		this.protectedBlocks = new Map();
 	}
 
 
@@ -2535,7 +2541,7 @@ export class Disassembler extends EventEmitter {
 	 * without writing a temp file.
 	 */
 	protected applyAsmEventStream(events: AsmEvent[]): void {
-		type State = 'normal' | 'in-banner' | 'after-banner' | 'in-orphan';
+		type State = 'normal' | 'in-banner' | 'after-banner' | 'in-orphan' | 'in-protect';
 		let state: State = 'normal';
 
 		// Structured fields accumulated for the current banner.
@@ -2547,6 +2553,10 @@ export class Disassembler extends EventEmitter {
 		// Address and label name being re-imported from an orphan block (A8).
 		let orphanAddress = 0;
 		let orphanLabelName: string | undefined;
+		// Manual line-protection block accumulator (§10).
+		let protectStartAddr = 0;
+		let protectEndAddr   = 0;
+		let protectLines: string[] = [];
 
 		const flushPendingComments = (address: number) => {
 			if (pendingComments.length === 0) return;
@@ -2588,7 +2598,30 @@ export class Disassembler extends EventEmitter {
 						orphanAddress = ev.address;
 						orphanLabelName = undefined;
 						state = 'in-orphan';
+					} else if (ev.kind === 'protect-start') {
+						// Begin accumulating a manual line-protection block (§10).
+						pendingComments = [];
+						protectStartAddr = ev.startAddr;
+						protectEndAddr   = ev.endAddr;
+						protectLines     = [];
+						state = 'in-protect';
 					}
+					break;
+
+				case 'in-protect':
+					if (ev.kind === 'protect-end') {
+						this.protectedBlocks.set(protectStartAddr, {
+							endAddr: protectEndAddr,
+							lines:   protectLines,
+						});
+						protectStartAddr = 0;
+						protectEndAddr   = 0;
+						protectLines     = [];
+						state = 'normal';
+					} else if (ev.kind === 'protect-content') {
+						protectLines.push(ev.text);
+					}
+					// Any other event kind (malformed file) is silently ignored.
 					break;
 
 				case 'in-orphan': {
