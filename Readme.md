@@ -74,8 +74,8 @@ z80map is a fork of [**z80dismblr**](https://github.com/maziac/z80dismblr) by [m
 Significant new work added in this fork:
 
 - Firmware-style subroutine headers with static register analysis
-- Iterative round-trip annotation workflow (Stream A)
-- Clean reassembleable output for sjasmplus and maxam (Stream B)
+- Iterative round-trip annotation workflow
+- Clean reassembleable output for sjasmplus and maxam
 - Amstrad CPC RST dispatch decoding (`--machine cpc`)
 - Vortex hardware ROM decoder (`--decoder vortex`)
 - I/O port label system with wildcard matching and BC-tracker annotation
