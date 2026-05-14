@@ -1,4 +1,5 @@
 import assert = require('assert');
+import { ByteDecoder } from './decoders/types';
 
 
 
@@ -14,6 +15,12 @@ export class BaseMemory {
 
 	// The size of the area.
 	protected size: number;
+
+	/// Optional per-byte decoder applied to non-M1 reads (operands and data).
+	/// When unset, memory reads return raw bytes as stored. When set (via
+	/// setDecoder()), getValueAt() passes each byte through the decoder.
+	/// M1 fetches use getRawAt() and always bypass the decoder.
+	protected decoder?: ByteDecoder;
 
 	/**
 	 * Constructor: Initializes memory.
@@ -45,11 +52,35 @@ export class BaseMemory {
 
 
 	/**
-	 * Returns the memory value at address.
+	 * Installs or clears the non-M1 byte decoder.  When a decoder is set,
+	 * getValueAt() passes each byte through it before returning. getRawAt()
+	 * is unaffected and always returns the raw stored byte.
+	 */
+	public setDecoder(decoder: ByteDecoder | undefined): void {
+		this.decoder = decoder;
+	}
+
+
+	/**
+	 * Returns the memory value at address.  When a decoder has been installed
+	 * via setDecoder(), the byte is passed through the decoder first — suitable
+	 * for operand and data-byte reads.  For M1 (opcode) fetches use getRawAt().
 	 * @param address The address to retrieve.
-	 * @returns It's value.
+	 * @returns It's value, decoded if a decoder is installed.
 	 */
 	public getValueAt(address: number) {
+		const raw = this.getRawAt(address);
+		return this.decoder ? this.decoder(address, raw) : raw;
+	}
+
+
+	/**
+	 * Returns the raw stored byte at address, bypassing any installed decoder.
+	 * Use for M1 (opcode-fetch) reads — the byte the CPU would see on its
+	 * opcode-fetch cycle, which on decrypting-hardware ROMs is the plaintext
+	 * opcode that is already stored clear in the ROM.
+	 */
+	public getRawAt(address: number) {
 		address &= (MAX_MEM_SIZE - 1);
 		let index = address - this.startAddress;
 		if (index < 0) {
@@ -57,8 +88,8 @@ export class BaseMemory {
 			//index=MAX_MEM_SIZE+address-this.startAddress;
 			index += MAX_MEM_SIZE;
 		}
-		assert(index >= 0, 'getValueAt 1');
-		assert(index < this.size, 'getValueAt 2');
+		assert(index >= 0, 'getRawAt 1');
+		assert(index < this.size, 'getRawAt 2');
 		return this.memory[index];
 	}
 

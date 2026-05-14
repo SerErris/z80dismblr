@@ -285,10 +285,15 @@ export class Opcode {
 	/**
 	 * Returns the Opcode at address.
 	 * @param address The address to retrieve.
-	 * @returns It's opcode.
+	 * @param opcodes Opcode table to dispatch against (default = main table).
+	 * @param isOperandByte If true, the byte at `address` is read as a non-M1
+	 *   operand (passed through any installed memory decoder). Used only for
+	 *   the DDCB/FDCB op-byte dispatch, where the operation byte is fetched
+	 *   after an M1 prefix pair and is therefore non-M1.
+	 * @returns The decoded opcode instance.
 	 */
-	public static getOpcodeAt(memory: BaseMemory, address: number, opcodes = Opcodes): Opcode {
-		const memValue = memory.getValueAt(address);
+	public static getOpcodeAt(memory: BaseMemory, address: number, opcodes = Opcodes, isOperandByte = false): Opcode {
+		const memValue = isOperandByte ? memory.getValueAt(address) : memory.getRawAt(address);
 		const opcode = opcodes[memValue];
 		const realOpcode = opcode.getOpcodeAt(memory, address);
 		return realOpcode;
@@ -687,10 +692,13 @@ class OpcodeExtended2 extends OpcodeExtended {
 	/**
 	 * This is a 3 byte opcode.
 	 * The first 2 bytes are DDCB followed by a value (for the index),
-	 * followed by the rest of the opcode.
+	 * followed by the rest of the opcode.  The op byte at address+2 (from the
+	 * CB position, i.e. +3 from the DD/FD) is fetched on a non-M1 cycle on
+	 * real hardware — for decrypting-ROM targets this means the byte must
+	 * pass through the memory decoder when one is installed.
 	 */
 	public getOpcodeAt(memory: BaseMemory, address: number): Opcode {
-		return Opcode.getOpcodeAt(memory, address + 2, this.opcodes);
+		return Opcode.getOpcodeAt(memory, address + 2, this.opcodes, /* isOperandByte */ true);
 	}
 }
 

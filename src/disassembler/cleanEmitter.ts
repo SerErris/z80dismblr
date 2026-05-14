@@ -316,7 +316,7 @@ export class CleanEmitter {
 					if (attr & MemAttribute.CODE) {
 						// B2d — CPC RST 3-byte expansion (active only when --cpc is set)
 						if (this.dasm.cpcMode) {
-							const opByte  = memory.getValueAt(walkAddress);
+							const opByte  = memory.getRawAt(walkAddress);   // M1 opcode fetch
 							const cpcInfo = CPC_RST.get(opByte);
 							if (cpcInfo) {
 								lines.push('\t\t\trst\t' + Format.formatHex(opByte & 0x38, 2));
@@ -338,7 +338,7 @@ export class CleanEmitter {
 						// Invalid opcodes → emit each raw byte as defb
 						if (opcode.name.startsWith('invalid instruction')) {
 							for (let i = 0; i < opcode.length; i++)
-								lines.push('\t\t\tdefb\t' + Format.formatHex(memory.getValueAt(walkAddress + i), 2));
+								lines.push('\t\t\tdefb\t' + Format.formatHex(memory.getRawAt(walkAddress + i), 2));  // invalid opcode: M1 bytes, keep raw
 							walkAddress += opcode.length;
 						} else if (opcode.appendValueTypes && !this.dasm.cpcMode) {
 							// B2b — custom --opcode extension (active only when --cpc is NOT set):

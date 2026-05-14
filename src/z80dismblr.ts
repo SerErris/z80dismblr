@@ -4,6 +4,7 @@ import { Opcode, Opcodes } from './disassembler/opcode';
 import { writeArgsOut, writeSymbolsOut } from './disassembler/argsWriter';
 import { Format, HexFormat } from './disassembler/format';
 import { CleanEmitter, CleanFormat, CleanHex, defaultHexForFormat, parseCleanFormat, parseCleanHex } from './disassembler/cleanEmitter';
+import { vortexDecoder } from './disassembler/decoders/vortex';
 import * as Path from 'path';
 //import * as assert from 'assert';
 //import { DisLabel } from './disassembler/dislabel';
@@ -418,6 +419,14 @@ z80dismblr [options]
             behaves identically to standard mode and all RST opcodes are treated as
             plain Z80 restarts.
 
+        --decoder name: Enable a hardware ROM decoder for encrypted Z80 firmware.
+            Opcode/prefix bytes (M1 cycles) are read raw; operand and data bytes
+            pass through the decoder. Currently supported: 'vortex' (Vortex disk
+            controller ROM — XOR of D5/D3 based on A2/A4 address bits).  Assembled
+            output is a cleartext ROM; it will NOT re-produce the original
+            encrypted image byte-for-byte.
+            Example: --decoder vortex
+
     Data annotation:
         The following options annotate known data areas and labels. They work
         independently of --cpc and can be combined with any disassembly mode.
@@ -570,6 +579,18 @@ z80dismblr [options]
                 // Amstrad CPC mode
                 case '--cpc':
                     this.dasm.cpcMode = true;
+                    break;
+
+                // Hardware-decrypting ROM decoder (opt-in, very specific use case)
+                case '--decoder':
+                    {
+                        const decoderName = args.shift();
+                        if (decoderName === 'vortex') {
+                            this.dasm.memory.setDecoder(vortexDecoder);
+                        } else {
+                            throw arg + ": Unknown decoder '" + decoderName + "' (valid: vortex)";
+                        }
+                    }
                     break;
 
                 // Data range

@@ -164,11 +164,13 @@ export class Format {
 			line = Format.addSpaces(Format.getHexString(address) + ' ', clmnsAddress);
 		}
 
-		// Add bytes of opcode?
+		// Add bytes of opcode?  Show the raw (undecoded) bytes that are
+		// physically stored in memory — the hex-dump column reflects ROM
+		// content, not the program-visible decoded values.
 		let bytesString = '';
 		if (memory) {
 			for (let i = 0; i < size; i++) {
-				const memVal = memory.getValueAt(address + i);
+				const memVal = memory.getRawAt(address + i);
 				bytesString += Format.getHexString(memVal, 2) + ' ';
 			}
 		}

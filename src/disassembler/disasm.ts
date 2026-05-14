@@ -719,7 +719,7 @@ export class Disassembler extends EventEmitter {
 
 				// CPC RST intercept: handle extended RST opcodes in CPC mode
 				if (this.cpcMode) {
-					const rawByte = this.memory.getValueAt(address);
+					const rawByte = this.memory.getRawAt(address);   // M1 opcode fetch
 					const rstInfo = CPC_RST.get(rawByte);
 					if (rstInfo) {
 						// Mark memory as code
@@ -2961,7 +2961,7 @@ export class Disassembler extends EventEmitter {
 
 				// CPC RST output intercept
 				if (this.cpcMode && (attr & MemAttribute.CODE)) {
-					const rawByte = this.memory.getValueAt(address);
+					const rawByte = this.memory.getRawAt(address);   // M1 opcode fetch
 					const rstInfo = CPC_RST.get(rawByte);
 					if (rstInfo) {
 						const cpcLines = formatCpcRst(rstInfo, address, this.memory, (a) => {
