@@ -1,3 +1,10 @@
+## 3.1.2
+- **`--symbolsout` excludes labels already in `--symbols` input files.** Newly discovered labels are the only ones emitted, so the output can be appended directly to an existing `--symbols` file without creating duplicates.
+- **Banner in `.asm` file promotes label to `CODE_SUB`.** When the round-trip importer encounters a banner block (`; ***…***`) followed by a label, that label is locked as a subroutine. This preserves user-written banners across re-runs even when the address is only reached by `jp`/`jp cc` rather than `CALL`.
+- **`; type: sub` marker** — writing `; type: sub` immediately before a label in the `.asm` file promotes it to `CODE_SUB` on the next run and replaces the marker with a generated skeleton banner. Useful for tail-call targets and any jump-only entry point the user knows to be a subroutine.
+- User manual §4.9 added documenting the `; type: sub` workflow and the banner-based promotion.
+
+
 ## 3.1.1
 - **`--symbolsout` now includes user-supplied symbols from `--symbols` input files.** Previously, labels whose addresses fell outside the loaded binary (e.g. system firmware entry points like `KL_CHOKE_OFF`) were classified as EQU labels and silently omitted from `--symbolsout`. They now appear in the output merged by address alongside discovered labels, making the output file a usable round-trip base that preserves all named symbols.
 
