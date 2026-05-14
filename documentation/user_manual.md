@@ -119,27 +119,51 @@ This compiles TypeScript and then packages for four targets:
 | `z80map-macos-arm64` | macOS ARM64 (Apple Silicon) |
 | `z80map-win.exe` | Windows x86-64 |
 
-**Usage after packaging:**
+**Rename the platform binary to `z80map`**
+
+When building for all platforms the packager appends the platform suffix
+automatically (e.g. `z80map-linux`). Rename the binary for your platform
+to `z80map` and place it on your `PATH`:
 
 ```bash
-# Linux / macOS — make executable first if needed
-chmod +x z80map-linux
-./z80map-linux --args project.args
+# Linux
+mv z80map-linux z80map
+chmod +x z80map
+sudo mv z80map /usr/local/bin/          # optional — makes it available system-wide
 
-# Windows
-z80map-win.exe --args project.args
+# macOS Intel
+mv z80map-macos z80map
+chmod +x z80map
+sudo mv z80map /usr/local/bin/
+
+# macOS Apple Silicon
+mv z80map-macos-arm64 z80map
+chmod +x z80map
+sudo mv z80map /usr/local/bin/
+
+# Windows — rename in Explorer or PowerShell
+Rename-Item z80map-win.exe z80map.exe
+# Then add the folder to your PATH in System Settings
+```
+
+After this you can invoke the tool simply as:
+
+```bash
+z80map --args project.args
+```
+
+**Build and rename in one step (single platform):**
+
+```bash
+npm run compile
+# Produces a binary named exactly z80map (no suffix) for the current platform
+npx @yao-pkg/pkg out/z80map.js --targets node20-linux-x64 --output z80map
+chmod +x z80map
 ```
 
 **Build via VS Code:** run the **Build Executables** task from the VS Code
 Tasks panel (`Ctrl+Shift+P` → *Tasks: Run Task* → *Build Executables*). The
-task also zips each binary for distribution.
-
-**Manual packaging for a single target** (e.g. Linux only):
-
-```bash
-npm run compile
-npx @yao-pkg/pkg out/z80map.js --targets node20-linux-x64 --output z80map
-```
+task compiles, packages all four targets, and zips each binary.
 
 Available target platforms: `linux`, `macos`, `win`.  
 Available architectures: `x64`, `arm64`.  
@@ -149,10 +173,14 @@ Node version used for bundling: `node20` (matches `engines.node ≥ 18`).
 
 ## 3. Quick Start
 
+The examples throughout this manual use the packaged executable `z80map`
+(see §2.3 for how to build and install it). If you are running from source
+instead, replace `z80map` with `z80map` in every command.
+
 Disassemble a plain binary loaded at address `0x0000`:
 
 ```bash
-node out/z80map.js --bin 0x0000 rom.bin --out rom.asm
+z80map --bin 0x0000 rom.bin --out rom.asm
 ```
 
 Open `rom.asm` in your editor, rename some labels, fill in documentation, then re-run the exact same command. Your edits are automatically preserved.
@@ -160,7 +188,7 @@ Open `rom.asm` in your editor, rename some labels, fill in documentation, then r
 To also produce a re-assembleable source file:
 
 ```bash
-node out/z80map.js --bin 0x0000 rom.bin --out rom.asm --cleanout rom.s
+z80map --bin 0x0000 rom.bin --out rom.asm --cleanout rom.s
 ```
 
 ---
@@ -213,7 +241,7 @@ The address column — `--clmnsAddress` — is **on by default** and should stay
 ### 4.1 First Run
 
 ```bash
-node out/z80map.js --bin 0x0000 rom.bin --out rom.asm
+z80map --bin 0x0000 rom.bin --out rom.asm
 ```
 
 `rom.asm` does not yet exist, so the disassembler runs from scratch. It produces a fully annotated listing with auto-generated labels (`SUB001`, `SUB002`, …), register-analysis results, and `—` placeholders in all documentation fields.
@@ -267,7 +295,7 @@ Or suppress the auto-generated comment entirely by starting with `;;`:
 Run the exact same command:
 
 ```bash
-node out/z80map.js --bin 0x0000 rom.bin --out rom.asm
+z80map --bin 0x0000 rom.bin --out rom.asm
 ```
 
 The disassembler detects that `rom.asm` already exists and automatically parses it before analysis. Everything you edited is extracted and merged back into the new output. The file is then overwritten with a freshly regenerated listing that contains:
@@ -545,7 +573,7 @@ An args file lets you collect all command-line options into a text file rather t
 Run it with:
 
 ```bash
-node out/z80map.js --args cpc_rom.args
+z80map --args cpc_rom.args
 ```
 
 Command-line options and `--args` options can be mixed freely; they are processed in order.
@@ -1188,14 +1216,14 @@ In `--cleanout` output (when `--machine cpc` is not active), the extension is sp
 
 ```bash
 # First pass
-node out/z80map.js \
+z80map \
   --bin 0x0000 game_rom.bin \
   --out game.asm
 
 # Edit game.asm: rename labels, add notes
 
 # Second pass — edits are preserved automatically
-node out/z80map.js \
+z80map \
   --bin 0x0000 game_rom.bin \
   --out game.asm
 ```
@@ -1203,7 +1231,7 @@ node out/z80map.js \
 ### Multi-segment Binary with Known Entry Points
 
 ```bash
-node out/z80map.js \
+z80map \
   --bin 0x0000 rom_bank0.bin \
   --bin 0x4000 rom_bank1.bin \
   --noautomaticaddr \
@@ -1229,7 +1257,7 @@ cat > cpc.args << 'EOF'
 --argsout cpc464.args
 EOF
 
-node out/z80map.js --args cpc.args
+z80map --args cpc.args
 ```
 
 ### Encrypted Vortex Disk-Controller ROM (CPC)
@@ -1277,7 +1305,7 @@ node /path/to/z80map/out/z80map.js --args project.args
 
 ```bash
 # Step 1: disassemble and generate a skeleton symbol file
-node out/z80map.js \
+z80map \
   --bin 0x0000 rom.bin \
   --out rom.asm \
   --symbolsout rom_skeleton.sym
@@ -1285,7 +1313,7 @@ node out/z80map.js \
 # Step 2: review and edit rom_skeleton.sym — fill in names and fields
 
 # Step 3: re-run using your edited symbols file
-node out/z80map.js \
+z80map \
   --bin 0x0000 rom.bin \
   --symbols rom_skeleton.sym \
   --out rom.asm
@@ -1295,7 +1323,7 @@ node out/z80map.js \
 
 ```bash
 # Disassemble and emit clean source
-node out/z80map.js \
+z80map \
   --bin 0x0000 rom.bin \
   --out rom.asm \
   --cleanout rom.s \
@@ -1311,7 +1339,7 @@ cmp rom.bin rom_rebuilt.bin && echo "Byte-identical ✓" || echo "Mismatch ✗"
 ### ZX Spectrum Snapshot
 
 ```bash
-node out/z80map.js \
+z80map \
   --sna game.sna \
   --out game.asm \
   --uppercase \
@@ -1321,7 +1349,7 @@ node out/z80map.js \
 ### Call Graph for a Subsystem
 
 ```bash
-node out/z80map.js \
+z80map \
   --bin 0x0000 rom.bin \
   --symbols rom.sym \
   --out rom.asm \

@@ -29,7 +29,7 @@ the placeholders, and use it as context for Claude Code sessions.
 **Always run via the args file:**
 
 ```bash
-node /path/to/z80map/out/z80map.js --args project.args
+z80map --args project.args
 ```
 
 Every option is in `project.args`. The command does not change between runs.
@@ -104,7 +104,7 @@ project. The project lives at `~/reverse_eng/vortex/`.
 
 **Run from `~/reverse_eng/vortex/`:**
 ```bash
-node ~/z80map/out/z80map.js --args project.args
+z80map --args project.args
 ```
 
 ---
@@ -233,7 +233,7 @@ Any `;` lines placed immediately above a label are preserved verbatim:
 ### Running the disassembler
 
 ```bash
-node ~/z80map/out/z80map.js --args project.args
+z80map --args project.args
 ```
 
 Run this whenever you want to regenerate the listing (e.g. after adding entries
