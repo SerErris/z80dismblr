@@ -55,6 +55,12 @@ export class DisLabel {
 		address: number;
 	};
 
+	/// Widest access size observed for this DATA_LBL during analysis.
+	/// 2 = accessed by a 16-bit load (LD HL,(nn) etc.) → emit `defw` in
+	/// clean output.  undefined / 1 = byte access only → emit `defb`.
+	/// "Larger wins": once set to 2 it is never narrowed back to 1.
+	public accessWidth?: 1 | 2;
+
 
 	/**
 	 * Constructor: Initializes memory.

@@ -1154,6 +1154,14 @@ export class Disassembler extends EventEmitter {
 			const attr = this.memory.getAttributeAt(address);
 			// Create new label or prioritize if label already exists
 			this.setFoundLabel(address, new Set([opcodeAddress]), opcode.valueType, attr);
+			// Track access width for clean-output word detection (Level 2).
+			// If the source/dest register is a 16-bit pair, the access is 2 bytes.
+			// "Larger wins": once a label is seen as a word access, never narrow it.
+			if (/\b(HL|DE|BC|IX|IY|SP)\b/.test(opcode.name)) {
+				const lbl = this.labels.get(address);
+				if (lbl && lbl.accessWidth !== 2)
+					lbl.accessWidth = 2;
+			}
 		}
 
 		// Everything fine

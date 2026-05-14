@@ -163,12 +163,25 @@ export class CleanEmitter {
 	 * Emit `len` data bytes starting at `addr` as grouped `defb` / `defs` lines.
 	 *
 	 * Rules:
+	 *   - If the label at `addr` has `accessWidth === 2` and at least 2 bytes
+	 *     remain: emit a `defw <word>` for the first two bytes, then continue
+	 *     with the remaining bytes using the rules below.
 	 *   - Runs of ≥ 16 consecutive zero bytes → `defs N, 0`
 	 *   - Everything else → `defb $XX, $XX, ...` with up to 8 bytes per line,
 	 *     but the group is broken before any ≥ 16-byte zero run.
 	 */
 	protected emitDataRegion(lines: string[], memory: Memory, addr: number, len: number): void {
 		let pos = 0;
+		// Level-2 word detection: emit defw when the data label was accessed
+		// by a 16-bit load instruction (LD HL,(nn) etc.).
+		const startLabel = this.dasm.labels.get(addr);
+		if (startLabel?.accessWidth === 2 && len >= 2) {
+			const lo   = memory.getValueAt(addr);
+			const hi   = memory.getValueAt(addr + 1);
+			const word = lo | (hi << 8);
+			lines.push('\t\t\tdefw\t' + Format.formatHex(word, 4));
+			pos = 2;
+		}
 		while (pos < len) {
 			// Count consecutive zeros at current position
 			let zeros = 0;
