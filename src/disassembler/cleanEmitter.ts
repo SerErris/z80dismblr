@@ -209,6 +209,40 @@ export class CleanEmitter {
 
 
 	/**
+	 * Extracts the assembler-ready text from one verbatim line stored in a
+	 * `protectedBlocks` entry, for use in `--cleanout` output (§10.5).
+	 *
+	 * Returns `undefined` when the line should be silently dropped:
+	 *   - blank lines
+	 *   - pure comment lines (start with `;`)
+	 *   - lines that produce only whitespace after stripping
+	 *
+	 * Otherwise strips:
+	 *   1. The optional address + bytes prefix (`XXXX [XX ...]` at the start).
+	 *   2. Any trailing inline comment (everything from the first `;` onwards).
+	 *
+	 * `isLabel` is `true` when the result ends with `:`, indicating a label
+	 * line that should be emitted flush-left via `labelLine()` (caller strips
+	 * the `:` before passing to `labelLine()`).
+	 */
+	protected extractCleanLine(raw: string): {text: string; isLabel: boolean} | undefined {
+		const trimmed = raw.trim();
+		if (trimmed === '' || trimmed.startsWith(';'))
+			return undefined;
+		// Strip leading address (4 hex digits) + optional byte groups (2 hex digits each).
+		let text = trimmed.replace(/^[0-9A-Fa-f]{4}(?:\s+[0-9A-Fa-f]{2})*\s+/, '');
+		// Strip trailing inline comment.
+		const semi = text.indexOf(';');
+		if (semi >= 0)
+			text = text.slice(0, semi);
+		text = text.trim();
+		if (text === '')
+			return undefined;
+		return {text, isLabel: text.endsWith(':')};
+	}
+
+
+	/**
 	 * Throws if the format is maxam and the disassembled binary contains any
 	 * ZX Next opcode (OpcodeNext / OpcodeNextPush), which maxam does not support.
 	 * Must be called before any output is written.
@@ -324,6 +358,22 @@ export class CleanEmitter {
 						}
 						firstLabelInBlock = false;
 						lines.push(this.labelLine(addrLabel.name));
+					}
+
+					// Protected block intercept (§10): emit extracted instructions
+					// instead of raw bytes or auto-disassembly.
+					// The auto-generated label at walkAddress was already emitted above.
+					const protBlock = this.dasm.protectedBlocks.get(walkAddress);
+					if (protBlock !== undefined) {
+						for (const raw of protBlock.lines) {
+							const extracted = this.extractCleanLine(raw);
+							if (!extracted) continue;
+							lines.push(extracted.isLabel
+								? this.labelLine(extracted.text.slice(0, -1))  // strip trailing ':'
+								: '\t\t\t' + extracted.text);
+						}
+						walkAddress = protBlock.endAddr + 1;
+						continue;
 					}
 
 					if (attr & MemAttribute.CODE) {
