@@ -364,7 +364,7 @@ The core idea is that `--out rom.asm` serves two purposes simultaneously: it is 
 | `--args <file>` | Keeps the command identical across every run; prevents parameter drift (see §4.8) |
 | `--addbytes` | Shows hex bytes next to each instruction; not required for round-trip but essential for cross-referencing raw bytes against the listing |
 | `--symbols <file>` | Pre-loads known label names and documentation fields; much better starting point than all-auto-generated names |
-| `--symbolsout <file>` | Exports discovered labels on each run as a primer; review and fold into `--symbols` |
+| `--symbolsout <file>` | Exports newly discovered labels (not already in `--symbols`) each run; review and append to `--symbols` |
 | `--argsout <file>` | Exports discovered data ranges on each run; review and fold into `--args` |
 
 **Machine-specific flags:**
@@ -536,9 +536,9 @@ node /path/to/z80map/out/z80map.js --args project.args --fresh
 
 A practical rhythm for deep ROM analysis:
 
-**Pass 1 — Discovery.**  Run with `--symbolsout` and `--argsout`. Review the generated symbol skeleton and args file. Identify obvious subroutines, add names, mark any additional data ranges.
+**Pass 1 — Discovery.**  Run with `--symbolsout` and `--argsout`. Review the generated symbol skeleton and args file. Rename obvious subroutines, mark any additional data ranges. Append the reviewed skeleton to a new `--symbols` file.
 
-**Pass 2 — Seed known labels.**  Build a `--symbols` file from what you found. Add well-known firmware entry points (e.g. CPC BIOS jumpblock addresses). Re-run.
+**Pass 2 — Seed known labels.**  Add well-known firmware entry points (e.g. CPC BIOS jumpblock addresses) to your `--symbols` file. Re-run with `--symbolsout` again — only labels not yet in `--symbols` are emitted, so you can keep appending safely.
 
 **Pass 3–N — Annotation.**  Open the `.asm` file in your editor. Use `;;` inline comments to note intent as you understand it. Rename labels in-place. Fill in structured fields in the subroutine banners. Re-run after each session to regenerate the freshly-analysed parts.
 
@@ -659,7 +659,7 @@ A symbols file is a plain-text sidecar that provides the disassembler with named
 
 A symbols file is optional but highly recommended for any ROM or firmware with a known label set (e.g. a CPC BIOS symbol table).
 
-The file uses the same round-trip format as the `.asm` output, so `--symbolsout` output can be used directly as `--symbols` input after you review and edit it.
+The file uses the same format as `--symbolsout` output. A typical workflow is to append each `--symbolsout` run directly to your `--symbols` file: newly discovered labels are the only ones emitted, so there are no duplicates to remove.
 
 ### 6.1 Address and Label Entries
 
@@ -1039,7 +1039,7 @@ Override with `--cleanout-hex` when needed.
 --symbolsout <file>
 ```
 
-After disassembly, writes a skeleton `--symbols` file containing all named labels discovered during analysis. This is intended as a starting point: review it, rename labels, fill in the documentation fields, and then use it as `--symbols` input on future runs.
+After disassembly, writes a skeleton `--symbols` file containing only the named labels that were **newly discovered** during this run — labels already present in any `--symbols` input file are excluded. This means the output can be appended directly to your existing `--symbols` file without creating duplicates.
 
 **Format:**
 
@@ -1064,6 +1064,7 @@ After disassembly, writes a skeleton `--symbols` file containing all named label
 
 **Properties:**
 
+- Labels already defined in a `--symbols` input file are omitted (safe to append)
 - Subroutine entries (code labels, RST targets) receive empty structured-field placeholders
 - Data labels are emitted as plain address + name lines with no placeholders
 - Jump-target labels (`LBL`-prefix) are included without placeholders
