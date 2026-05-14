@@ -11,7 +11,7 @@ Each item links to the relevant design document section for full context.
 |---|-------|------------|----------|
 | 1 | [Round-trip comments (Stream A)](#1-round-trip-comments-stream-a) | `iterative_workflow.md §7.1` | ~~High~~ **Done** |
 | 2 | [Clean assembler output (Stream B)](#2-clean-assembler-output-stream-b) | `iterative_workflow.md §7.2` | ~~Medium~~ **Done** |
-| 3 | [I/O port label handling](#3-io-port-label-handling) | `iterative_workflow.md §3.7.2` | Low |
+| 3 | [I/O port label handling](#3-io-port-label-handling) | `iterative_workflow.md §3.7.2` | ~~Low~~ **Done** |
 | 4 | [Data grouping — word detection (Level 2)](#4-data-grouping--word-detection-level-2) | `iterative_workflow.md §6.5` | Low |
 | 5 | [Data grouping — string & struct detection (Level 3)](#5-data-grouping--string--struct-detection-level-3) | `iterative_workflow.md §6.5` | Low |
 | 6 | [Replace `--cpc` with `--machine cpc`](#6-replace---cpc-with---machine-cpc) | — | ~~Low~~ **Done** |
@@ -191,6 +191,8 @@ $ z80dismblr --bin rom.bin --out rom.asm \
 ---
 
 ## 3. I/O port label handling
+
+**Status:** ✅ Done (v2.3.0, branch IO_port_label_handling). Section retained for design rationale.
 
 **Design reference:** `iterative_workflow.md §3.7.2`
 
