@@ -24,6 +24,7 @@ Key capabilities:
    - 4.2 [Editing the Output File](#42-editing-the-output-file)
    - 4.3 [Re-running the Disassembler](#43-re-running-the-disassembler)
    - 4.4 [What Is and Is Not Preserved](#44-what-is-and-is-not-preserved)
+   - 4.9 [Manual Line-Protection Blocks](#49-manual-line-protection-blocks)
 5. [Input Files](#5-input-files)
    - 5.1 [Binary Files (`--bin`)](#51-binary-files---bin)
    - 5.2 [ZX Spectrum Snapshots (`--sna`)](#52-zx-spectrum-snapshots---sna)
@@ -304,6 +305,7 @@ The disassembler detects that `rom.asm` already exists and automatically parses 
 - Your documentation field values (preserved)
 - Your `;;` inline comments (preserved verbatim)
 - Your free-form comments above labels/instructions (preserved)
+- Your manual protect blocks (`;;{`…`;;}`) — re-emitted exactly as written
 - Fresh register analysis, call cross-references, and statistics
 
 To start completely fresh (ignoring all previous edits), simply delete or rename the file before running.
@@ -316,6 +318,7 @@ To start completely fresh (ignoring all previous edits), simply delete or rename
 | `Summary:`, `Action:`, `Entry:`, `Exit (success/failure):` fields | ✅ When value is not `—` |
 | Free-form `;` lines above a label or instruction | ✅ Re-emitted above the same address |
 | Inline user notes after `;;` on instruction lines | ✅ Verbatim |
+| Manual protect blocks (`;;{`…`;;}`) | ✅ Entire block re-emitted verbatim; no auto-disassembly for the address range |
 | `Corrupted:` / `Preserved:` register lists | ❌ Always regenerated from the analyser |
 | Auto-generated address, size, CC statistics | ❌ Always regenerated |
 | Caller / callee cross-reference lists | ❌ Always regenerated |
@@ -392,6 +395,70 @@ A practical rhythm for deep ROM analysis:
 **Pass 3–N — Annotation.**  Open the `.asm` file in your editor. Use `;;` inline comments to note intent as you understand it. Rename labels in-place. Fill in structured fields in the subroutine banners. Re-run after each session to regenerate the freshly-analysed parts.
 
 At any time you can also run with `--cleanout` to produce a re-assembleable `.s` file, verify it assembles byte-for-byte, and use that to test your understanding of the ROM structure.
+
+### 4.9 Manual Line-Protection Blocks
+
+Sometimes the static analyser cannot decode a region correctly — for example bytes that are copied to RAM and executed, Vortex-encrypted operands, or self-decrypting stubs. In these cases you can replace the auto-generated output for any address range with your own hand-written content, and have it survive every subsequent re-run unchanged.
+
+**Wrap the range with protect markers:**
+
+```asm
+C000 DATA_BLOCK:
+;;{ C000 C010
+C000 3E 01        LD   A,1           ;; hand-decoded
+C002 CD 00 BB     CALL $BB00         ;; call TXT_OUTPUT
+C005 C9           RET
+;;}
+C011 NEXT_ROUTINE:
+```
+
+The start marker `;;{ XXXX YYYY` takes two plain 4-digit hex addresses: the first byte of the protected range (inclusive) and the last byte (inclusive). The end marker is `;;}`.
+
+**Long form** (interchangeable with the short form):
+
+```asm
+;;PROTECT-START C000 C010
+...manual content...
+;;PROTECT-END
+```
+
+**What the disassembler does:**
+
+| What | Behaviour |
+|------|-----------|
+| Auto-generated label at the start address | Emitted normally, **above** the `;;{` marker |
+| Bytes `C000`–`C010` (analysis pass) | Unchanged — analysis still runs over the binary |
+| Verbose `.asm` output for `C000`–`C010` | `;;{` marker, then your lines verbatim, then `;;}`; no `DEFB`/`DEFW`/mnemonic generated |
+| `--cleanout` output for `C000`–`C010` | Your instruction/directive lines, with address prefix and comments stripped; comment-only lines dropped; no `DEFB` generated |
+| Anything outside the block | Normal auto-disassembly, unaffected |
+| Labels inside the block | **Opaque** — not registered in the symbol table; do not appear in call graphs |
+
+**Rules:**
+
+- The protect block is idempotent — emitting the `.asm` file and re-running produces byte-identical output.
+- Any content is valid inside the block: instructions, directives, `;;` comments, `;` comments, blank lines.
+- For `--cleanout`, only lines that contain an instruction or directive are emitted (comment lines and blanks are dropped).
+- The `;;{` and `;;}` markers use the existing user-owned `;;` prefix and cannot be confused with orphan-block markers or instruction inline comments.
+- Nested protect blocks are not supported.
+
+**Typical use cases:**
+
+```asm
+; Bytes copied to RAM and executed — original binary has encrypted operands
+;;{ C000 C00F
+C000 3E 7F        LD   A,#7F         ;; GA: select border pen
+C002 D3 7F        OUT  (#7F),A       ;; OUT to Gate Array
+C004 C9           RET
+;;}
+```
+
+```asm
+; Jump table — bytes are data but encode code pointers
+;;{ C200 C21F
+C200 34 BB        defw KL_CHOKE_ON   ; jump entry 0
+C202 37 BB        defw KL_CHOKE_ON   ; jump entry 1
+;;}
+```
 
 ---
 

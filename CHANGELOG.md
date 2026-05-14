@@ -1,3 +1,9 @@
+## 3.1.0
+- **Manual line-protection blocks** — wrap any address range in `;;{ XXXX YYYY` / `;;}` markers (short form) or `;;PROTECT-START` / `;;PROTECT-END` (long form) to prevent the disassembler from regenerating that section. Content between the markers is preserved verbatim on every re-run. For `--cleanout` output, instruction and directive lines are extracted and emitted; comment lines are dropped. No `DEFB` is generated for the protected range. Labels inside the block are opaque (not registered in the symbol table). The block is idempotent across unlimited round-trips.
+- User manual §4.9 added documenting the feature, with syntax reference, behaviour table, and worked examples.
+- §4.4 preservation table and §4.3 bullet list updated to include protect blocks.
+
+
 ## 3.0.1
 - Standalone executable build instructions added to user manual §2 (build, rename, and install to PATH for each platform; single-platform one-step packaging).
 - `npm run package` script added to `package.json`; VS Code *Build Executables* task updated from stale `node13` to `node20` targets using `@yao-pkg/pkg`, now including macOS ARM64.
