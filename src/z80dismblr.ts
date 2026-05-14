@@ -124,7 +124,11 @@ class Startup {
                 writeArgsOut(this.argsOutFile, this.stableArgs, discoveredDataRanges);
             }
             if(this.commentsOutFile) {
-                writeSymbolsOut(this.commentsOutFile, this.dasm.getSymbolsData());
+                writeSymbolsOut(
+                    this.commentsOutFile,
+                    this.dasm.getSymbolsData(),
+                    this.dasm.getPortSymbolsData(),
+                );
             }
 
             // Output disassembly

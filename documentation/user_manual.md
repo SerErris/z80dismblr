@@ -661,6 +661,23 @@ After disassembly, writes a skeleton `--symbols` file containing all named label
 - Entries are sorted by address ascending
 - No prose, no statistics, no auto-generated comments
 
+**I/O port section (appended when I/O instructions were found):**
+
+If the disassembly contains any `IN r,(C)` / `OUT (C),r` instructions with statically-known BC values, a `; --- discovered I/O ports ---` section is appended:
+
+```
+; --- discovered I/O ports ---
+port:FB7E   FDC_STATUS
+port:7F??   GATE_ARRAY
+; port:1234   PORT_1234   ; accessed but unnamed — add a label and uncomment
+```
+
+- **Named ports** (declared in `--symbols`, matched during the run) are emitted as active `port:XXXX NAME` lines. Wildcard specs (`?`) are preserved.
+- **Unnamed ports** (BC fully known, no matching label) appear as commented-out stubs with a placeholder name. Rename the placeholder and uncomment to add the port to your `--symbols` file.
+- Ports where BC was unknown at the I/O site are omitted (nothing useful to report).
+
+See [section 15 — CPC Mode (`--machine cpc`)](#15-cpc-mode---machine-cpc) for the `port:XXXX NAME` symbols-file syntax.
+
 ---
 
 ## 11. Output: Args File (`--argsout`)

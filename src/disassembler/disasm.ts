@@ -560,6 +560,64 @@ export class Disassembler extends EventEmitter {
 	 * can be synced address-by-address.
 	 */
 	/**
+	 * Converts a PortLabel's (address, mask) back to the four-character
+	 * `port:XXXX` spec string (uppercase hex; `?` where mask nibble is 0).
+	 */
+	private static portLabelSpec(address: number, mask: number): string {
+		let spec = '';
+		for (let i = 3; i >= 0; i--) {
+			const shift      = i * 4;
+			const nibbleMask = (mask    >> shift) & 0xF;
+			const nibbleAddr = (address >> shift) & 0xF;
+			spec += nibbleMask === 0 ? '?' : nibbleAddr.toString(16).toUpperCase();
+		}
+		return spec;
+	}
+
+
+	/**
+	 * Returns port-label entries for `--symbolsout`.
+	 *
+	 * Two groups are returned:
+	 *
+	 * `named` — declared port labels (from `portLabels`) that were matched
+	 *    at least once during this disassembly run. The `spec` field is the
+	 *    reconstructed `port:XXXX` address part (with `?` wildcards).
+	 *
+	 * `unnamed` — effective 16-bit ports seen at I/O sites that had fully
+	 *    known BC but no matching port label. Given as raw numbers sorted
+	 *    ascending. Useful as "add a name for these" hints in the output.
+	 */
+	public getPortSymbolsData(): {
+		named:   Array<{spec: string; name: string}>;
+		unnamed: number[];
+	} {
+		// Collect matched port labels.
+		const matchedSet = new Set<PortLabel>();
+		for (const annot of this.ioAnnotations.values())
+			if (annot.portLabel) matchedSet.add(annot.portLabel);
+
+		const named = this.portLabels
+			.filter(pl => matchedSet.has(pl))
+			.map(pl => ({
+				spec: Disassembler.portLabelSpec(pl.address, pl.mask),
+				name: pl.name,
+			}));
+
+		// Collect fully-known ports with no label match.
+		const unnamedSet = new Set<number>();
+		for (const annot of this.ioAnnotations.values()) {
+			const {b, c} = annot.bcState;
+			if (annot.portLabel === undefined && b !== undefined && c !== undefined)
+				unnamedSet.add(((b & 0xFF) << 8) | (c & 0xFF));
+		}
+		const unnamed = Array.from(unnamedSet).sort((a, b) => a - b);
+
+		return {named, unnamed};
+	}
+
+
+	/**
 	 * Returns all named labels for --symbolsout.
 	 * Only entries with a label name are included; nameless addresses,
 	 * auto-generated comments, and prose are all excluded.
