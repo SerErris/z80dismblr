@@ -1,8 +1,30 @@
+## 2.4.0
+- Level-2 data grouping: `DATA_LBL` addresses accessed by 16-bit load instructions (`LD HL,(nn)`, `LD DE,(nn)`, `LD (nn),HL`, `LD IX,(nn)`, etc.) are now emitted as a single `defw` instead of two `defb` bytes in clean (`--cleanout`) output. "Larger wins" on conflicting access widths (same address loaded as both byte and word → word wins). No change to verbose `.asm` output.
+- New `DisLabel.accessWidth?: 1 | 2` field populated during `collectLabels()` by inspecting the register name in the opcode (16-bit pair → width 2).
+- New documentation: `documentation/ai_reverse_engineering_guide.md` — a project template for AI-assisted reverse-engineering sessions, covering directory layout, annotation mechanics, a complete `project.args` example, and a Claude Code session workflow.
+- User manual (`documentation/user_manual.md`) substantially expanded: required vs recommended parameter tables, round-trip safety of all display options, detailed iterative workflow guidance (args file pattern, `--addbytes`, `--fresh`, multi-pass strategy), Vortex VDOS complete workflow example, and a new §19 on AI-assisted reverse engineering.
+
+
+## 2.3.0
+- `port:XXXX NAME` syntax in `--symbols` files declares named I/O port labels. Each of the four nibbles may be a literal hex digit or `?` wildcard (e.g. `port:7F??` matches any `LD BC,#7Fxx`). Wildcards are required on CPC where the low byte carries data, not address.
+- Every `IN r,(C)` / `OUT (C),r` instruction is annotated with `; Port #xxxx (NAME)` when the effective BC value is statically known at the I/O site.
+- BC linear-walk tracker resolves the effective port from the preceding `LD BC,nn`, `LD B,#n`, `LD C,#n`, `INC B`, `DEC B`, `INC BC`, `DEC BC`, and register-to-register propagation (`LD B,C` / `LD C,B`) within a basic block. Handles the FDC `INC BC` adjacent-port pattern and the CRTC/PPI `INC B + LD C,#n` data-piggyback pattern.
+- When the effective BC is only partially known (B known, C unknown), the annotation renders as `; Port #7F?? (GATE_ARRAY, low byte unknown)`.
+- `LD BC,nn` operand substituted with the port label name when an exact 16-bit match (`mask === 0xFFFF`) exists and BC reaches the I/O instruction unmodified. Wildcard labels never substitute into `LD BC` operands.
+- `IN A,(n)` / `OUT (n),A`: corrected a long-standing cosmetic bug where the immediate byte was formatted as 4 digits (`IN A,(00FEh)`) — now emits the correct 2-digit form (`IN A,(FEh)`). Annotated with `; Port #??n (NAME, high byte = A at runtime)`.
+- `NumberType.PORT_LBL` removed; `IN A,(n)` / `OUT (n),A` immediates now use `NUMBER_BYTE`.
+- `--symbolsout` includes a `; --- discovered I/O ports ---` section: matched named port labels emitted as active `port:XXXX NAME` lines (wildcards preserved); accessed but unnamed ports emitted as commented stubs with placeholder names.
+- Port lookup uses "most-specific mask wins" (highest popcount); first-declared breaks ties.
+
+
 ## 2.2.0
 - **Breaking change:** `--cpc` flag removed. Use `--machine cpc` instead.
 - New `--machine <name>` option introduced as the general target-machine selector. Only accepted value for now is `cpc`; future Z80 targets (other firmware ROMs with machine-specific RST conventions) can be added under the same flag without further CLI proliferation.
 - Any existing `--args` file or wrapper script that still passes `--cpc` will fail with "unknown option". No deprecation alias is provided — update call sites to `--machine cpc`.
 - Internally, `Disassembler.cpcMode: boolean` has been replaced with `Disassembler.machine: 'none' | 'cpc'`.
+- `--decoder name`: enables a hardware ROM decoder for encrypted Z80 firmware. Currently supported: `vortex` (Vortex disk-controller ROM — XOR of D5/D3 based on A2/A4 address bits). Opcode bytes (M1 cycles) are always read raw; operand and data bytes pass through the decoder. Assembled output is cleartext and will not reproduce the original encrypted binary byte-for-byte.
+- New `BaseMemory.getRawAt()` accessor always bypasses any installed decoder (used for M1 opcode-fetch paths throughout the disassembler and clean emitter).
+- New `BaseMemory.setDecoder()` installs or clears the non-M1 byte decoder.
 
 
 ## 2.1.0
