@@ -227,8 +227,10 @@ export class Opcode {
 					this.flags |= (name.indexOf(',') >= 0) ? OpcodeFlag.CONDITIONAL : OpcodeFlag.STOP;
 				}
 				else if (name.startsWith("IN") || name.startsWith("OUT")) {
-					// a port
-					this.valueType = NumberType.PORT_LBL;
+					// IN A,(n) / OUT (n),A — immediate byte is the low port address;
+					// the high byte is A at runtime. Treat as a plain byte value;
+					// port annotation is added by analyseIoPorts() (P8).
+					this.valueType = NumberType.NUMBER_BYTE;
 				}
 			}
 		}
@@ -388,12 +390,7 @@ export class Opcode {
 					this.value += address + 2;
 				break;
 			case NumberType.NUMBER_BYTE:
-				// byte value
-				this.value = memory.getValueAt(address + 1);
-				offs = 1;
-				break;
-			case NumberType.PORT_LBL:
-				// TODO: need to be implemented differently
+				// byte value (also covers IN A,(n) / OUT (n),A port immediates)
 				this.value = memory.getValueAt(address + 1);
 				offs = 1;
 				break;

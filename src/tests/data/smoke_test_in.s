@@ -139,8 +139,8 @@ alu_demo:
 			ret
 
 io_demo:
-			in a,($00FE)
-			out ($00FE),a
+			in a,($FE)
+			out ($FE),a
 			ld bc,$7F00
 			out (c),a
 			ld bc,$F640

@@ -85,13 +85,16 @@ suite('analyseIoPorts — instruction detection', () => {
 		assert.ok(!dasm.ioAnnotations.has(0x8005), 'SBC HL,BC not annotated');
 	});
 
-	test('IN A,(n) / OUT (n),A (DB/D3) are NOT yet annotated (P8/P9 scope)', () => {
+	test('IN A,(n) / OUT (n),A (DB/D3) are annotated with the immediate form (P8)', () => {
 		// $8000: DB FE     IN A,($FE)
 		// $8002: D3 FE     OUT ($FE),A
 		const dasm = makeDasm(0x8000, [0xDB, 0xFE, 0xD3, 0xFE],
 			[['??FE', 'ULA']]);
-		assert.ok(!dasm.ioAnnotations.has(0x8000));
-		assert.ok(!dasm.ioAnnotations.has(0x8002));
+		assert.ok(dasm.ioAnnotations.has(0x8000), 'IN A,(n) annotated');
+		assert.ok(dasm.ioAnnotations.has(0x8002), 'OUT (n),A annotated');
+		// Both have the immediate form flag set.
+		assert.strictEqual(dasm.ioAnnotations.get(0x8000)!.isImmediateForm, true);
+		assert.strictEqual(dasm.ioAnnotations.get(0x8002)!.isImmediateForm, true);
 	});
 
 });

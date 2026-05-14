@@ -35,6 +35,12 @@ export interface IoAnnotation {
 	 * the live BC value. Used by the operand-substitution phase (P6).
 	 */
 	sourceLdBcAddr?: number;
+	/**
+	 * Set to `true` for `IN A,(n)` / `OUT (n),A` instructions. The low
+	 * byte (`c` in bcState) is the immediate `n`; the high byte (`b`) is
+	 * always `undefined` because it comes from A at runtime.
+	 */
+	isImmediateForm?: true;
 }
 import {StructuredFields, Z80Register} from './registerAnalysis';
 import {RegAnalyzer, AnalyserContext} from './reganalyzer';
@@ -2133,6 +2139,29 @@ export class Disassembler extends EventEmitter {
 					this.ldBcPortSubstitutions.set(sourceLdBcAddr, portLabel);
 			}
 		}
+
+		// ── P8: IN A,(n) (DB nn) and OUT (n),A (D3 nn) ─────────────────────
+		// The immediate byte `n` is the low port address; the high byte comes
+		// from A at runtime so is always unknown to the disassembler. Annotate
+		// every occurrence unconditionally.
+		for (let addr = 0; addr <= 0xFFFE; addr++) {
+			const attr = this.memory.getAttributeAt(addr);
+			if (!(attr & MemAttribute.ASSIGNED))   continue;
+			if (!(attr & MemAttribute.CODE_FIRST)) continue;
+			const m1 = this.memory.getRawAt(addr);
+			if (m1 !== 0xDB && m1 !== 0xD3)   continue;
+
+			const n         = this.memory.getValueAt(addr + 1);
+			const query: PortLookupQuery = {kind: 'lowByteImmediate', n};
+			const portLabel = lookupPort(this.portLabels, query);
+
+			const state: BcState = {};
+			state.b = undefined;      // A is unknown at disassembly time
+			state.c = n;              // `n` is the low byte
+			const annotation: IoAnnotation = {bcState: state, isImmediateForm: true};
+			if (portLabel) annotation.portLabel = portLabel;
+			this.ioAnnotations.set(addr, annotation);
+		}
 	}
 
 
@@ -3312,17 +3341,17 @@ export class Disassembler extends EventEmitter {
 		const {b, c} = annot.bcState;
 		if (b === undefined && c === undefined) return '';
 
-		const partial = b === undefined ? ', high byte unknown'
-		              : c === undefined ? ', low byte unknown'
-		              : '';
+		// For IN A,(n) / OUT (n),A, the partial qualifier names A explicitly.
+		const partial = b === undefined
+			? (annot.isImmediateForm ? ', high byte = A at runtime' : ', high byte unknown')
+			: c === undefined ? ', low byte unknown'
+			: '';
 
 		let hexStr: string;
 		if (b !== undefined && c !== undefined) {
 			hexStr = Format.formatHex((b << 8) | c, 4);
 		}
 		else {
-			// One byte unknown: render as 4-char hex+wildcards with the
-			// current prefix/suffix applied manually.
 			const bStr = b !== undefined ? Format.getHexString(b, 2) : '??';
 			const cStr = c !== undefined ? Format.getHexString(c, 2) : '??';
 			const raw  = bStr + cStr;

@@ -8,8 +8,6 @@ export const enum NumberType {
 
 	// "Data LBL"-type, low priority, might be changed to SUB if necessary.
 	DATA_LBL,
-	// Label for "out/in" command
-	PORT_LBL,	// REMARK: Port needs other handling. Is another space, i.e. a memory label and a port label could have same number.
 
 	// "relative-label"-type, i.e. JR
 	CODE_LOCAL_LBL,
@@ -51,7 +49,6 @@ export function getNumberTypeAsString(type: NumberType): string {
 		case NumberType.NUMBER_WORD_BIG_ENDIAN: return "NUMBER_WORD_BIG_ENDIAN";
 		case NumberType.DATA_LBL: return "DATA_LBL";
 		//case NumberType.SELF_MODIFYING_CODE:	return "SELF_MODIFYING_CODE";
-		case NumberType.PORT_LBL: return "PORT_LBL";
 	}
 	// Unknown
 	assert(false, 'getNumberTypeAsString');

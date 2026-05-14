@@ -231,11 +231,9 @@ suite('Opcode', () => {
 		// LD A,B
 		assert(Opcodes[0x78].valueType == NumberType.NONE);
 
-		// IN
-		assert(Opcodes[0xDB].valueType == NumberType.PORT_LBL);
-
-		// OUT
-		assert(Opcodes[0xD3].valueType == NumberType.PORT_LBL);
+		// IN A,(n) / OUT (n),A — immediate is now NUMBER_BYTE (P8: PORT_LBL dropped)
+		assert(Opcodes[0xDB].valueType == NumberType.NUMBER_BYTE);
+		assert(Opcodes[0xD3].valueType == NumberType.NUMBER_BYTE);
 	});
 
 	test('length of opcode arrays', () => {
