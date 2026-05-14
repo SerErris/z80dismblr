@@ -1,3 +1,8 @@
+## 3.0.0
+- **Project renamed from `z80dismblr` to `z80map`.**  All source files, documentation, configuration, and npm package name updated. Entry point is now `out/z80map.js`. GitHub repository URLs (`maziac/z80dismblr`, `SerErris/z80dismblr`) are preserved as-is since the GitHub repos have not been renamed.
+- `package.json` cleaned up: removed stale VS Code extension fields (`publisher`, `vsce` scripts), moved `ts-node` to `devDependencies`, added `engines: { node: ">=18.0.0" }`, corrected author/contributors, updated repository URL.
+
+
 ## 2.4.0
 - Level-2 data grouping: `DATA_LBL` addresses accessed by 16-bit load instructions (`LD HL,(nn)`, `LD DE,(nn)`, `LD (nn),HL`, `LD IX,(nn)`, etc.) are now emitted as a single `defw` instead of two `defb` bytes in clean (`--cleanout`) output. "Larger wins" on conflicting access widths (same address loaded as both byte and word → word wins). No change to verbose `.asm` output.
 - New `DisLabel.accessWidth?: 1 | 2` field populated during `collectLabels()` by inspecting the register name in the opcode (16-bit pair → width 2).
