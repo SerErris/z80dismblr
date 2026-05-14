@@ -49,7 +49,7 @@ Key capabilities:
     - 14.1 [Auto-generated Names](#141-auto-generated-names)
     - 14.2 [Customising Prefixes](#142-customising-prefixes)
     - 14.3 [User-renamed Labels](#143-user-renamed-labels)
-15. [CPC Mode (`--cpc`)](#15-cpc-mode---cpc)
+15. [CPC Mode (`--machine cpc`)](#15-cpc-mode---machine-cpc)
 16. [Custom Opcode Extensions (`--opcode`)](#16-custom-opcode-extensions---opcode)
 17. [All Command-line Options](#17-all-command-line-options)
 18. [Typical Workflows by Use Case](#18-typical-workflows-by-use-case)
@@ -357,7 +357,7 @@ An args file lets you collect all command-line options into a text file rather t
 ```
 # CPC firmware ROM disassembly
 --bin 0x0000 cpc464_os.bin
---cpc
+--machine cpc
 --symbols cpc_bios.sym
 --out cpc464.asm
 --cleanout cpc464.s
@@ -603,14 +603,14 @@ DATA_TABLE:
 
 Override with `--cleanout-hex` when needed.
 
-**CPC RST 3-byte handling** (active when `--cpc` is set):
+**CPC RST 3-byte handling** (active when `--machine cpc` is set):
 
 ```asm
                 rst     $18
                 defw    TXT_OUTPUT
 ```
 
-**Custom `--opcode` expansion** (active when `--cpc` is NOT set):
+**Custom `--opcode` expansion** (active when `--machine cpc` is NOT set):
 
 ```asm
                 rst     $CF
@@ -679,7 +679,7 @@ After disassembly, writes a merged args file combining all the options used in t
 
 # --- input args ---
 --bin 0x0000 cpc464_os.bin
---cpc
+--machine cpc
 --symbols cpc_bios.sym
 --out cpc464.asm
 
@@ -814,13 +814,15 @@ Any other name — including names with mixed case, underscores, or custom prefi
 
 ---
 
-## 15. CPC Mode (`--cpc`)
+## 15. CPC Mode (`--machine cpc`)
 
 ```
---cpc
+--machine cpc
 ```
 
 Activates Amstrad CPC firmware RST dispatch decoding. In CPC mode the eight RST opcodes are interpreted as firmware calling convention entries rather than plain `RST n` instructions.
+
+`--machine <name>` is the general target-machine selector. The only accepted value today is `cpc`; future Z80 targets (other firmware ROMs with machine-specific RST conventions or calling patterns) will be added under the same flag.
 
 | RST | Opcode | Name | Operand bytes | Control flow |
 |-----|--------|------|---------------|-------------|
@@ -850,7 +852,7 @@ In the annotated listing, CPC RST calls appear with their decoded operand:
 0001 9C BF        DEFW BF9Ch ; pointer record
 ```
 
-**`--cpc` and `--opcode` are mutually exclusive.** When `--cpc` is active, any `--opcode` extensions are ignored.
+**`--machine cpc` and `--opcode` are mutually exclusive.** When `--machine cpc` is active, any `--opcode` extensions are ignored.
 
 ---
 
@@ -879,14 +881,14 @@ Decodes the sequence `CF 42` as:
 0050 CF 42        RST  08h, FUNC=42h
 ```
 
-In `--cleanout` output (when `--cpc` is not active), the extension is split back into the base instruction and a trailing `defb`:
+In `--cleanout` output (when `--machine cpc` is not active), the extension is split back into the base instruction and a trailing `defb`:
 
 ```asm
                 rst     $08
                 defb    $42
 ```
 
-**Cannot be combined with `--cpc`.** When `--cpc` is active, RST opcodes are handled by the CPC dispatch table and `--opcode` entries are ignored.
+**Cannot be combined with `--machine cpc`.** When `--machine cpc` is active, RST opcodes are handled by the CPC dispatch table and `--opcode` entries are ignored.
 
 ---
 
@@ -984,8 +986,8 @@ In `--cleanout` output (when `--cpc` is not active), the extension is split back
 
 | Option | Arguments | Description |
 |--------|-----------|-------------|
-| `--cpc` | — | Enable Amstrad CPC RST dispatch decoding |
-| `--opcode` | `<byte> <appendtext>` | Define custom opcode extension (repeatable; ignored when `--cpc` active) |
+| `--machine` | `<name>` | Select target-machine profile. Currently supported: `cpc` (Amstrad CPC RST dispatch decoding) |
+| `--opcode` | `<byte> <appendtext>` | Define custom opcode extension (repeatable; ignored when `--machine cpc` is active) |
 
 ### Information
 
@@ -1033,7 +1035,7 @@ node out/z80dismblr.js \
 # Put options in an args file for clarity
 cat > cpc.args << 'EOF'
 --bin 0x0000 cpc464_os.rom
---cpc
+--machine cpc
 --symbols cpc_bios.sym
 --noautomaticaddr
 --codelabel 0xBB00 KL_INIT

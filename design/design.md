@@ -17,7 +17,8 @@
   │ data[]   │ │ name     │  │linesBefore │  └──────────────┘
   │ attrib[] │ │ type     │  │inlineComment  ┌──────────┐
   └──────────┘ │ isEqu    │  │linesAfter  │  │  CPC_RST │
-               │ isFixed  │  └────────────┘  │ (--cpc)  │
+               │ isFixed  │  └────────────┘  │(--machine│
+               │          │                  │   cpc)   │
   ┌──────────┐ │ refs     │                  └──────────┘
   │  Opcode  │ │ calls    │  ┌────────────┐  ┌──────────┐
   │          │ │ corrupted│  │   Format   │  │argsWriter│
@@ -80,7 +81,7 @@ formatting.
 │  Recursive-descent CFG walk from all code entry points.             │
 │  Decode opcodes, classify operands, follow branches and calls,      │
 │  populate DisLabel.references, mark code/data attributes.           │
-│  CPC RST variants handled here when --cpc is active.                │
+│  CPC RST variants handled here when --machine cpc is active.        │
 └────────────────┬────────────────────────────────────────────────────┘
                  │
 ┌────────────────▼────────────────────────────────────────────────────┐
@@ -195,7 +196,7 @@ formatting.
 | `--symbols <file>` | Sidecar symbol file: address↔name bindings + structured fields |
 | `--codelabel <addr> [name]` | Seed a code entry point (repeatable) |
 | `--datarange <addr> <len>` | Mark address range as data (repeatable) |
-| `--cpc` | Enable Amstrad CPC firmware RST mode (3-byte RST handling) |
+| `--machine <name>` | Select target-machine profile. Supported: `cpc` (Amstrad CPC firmware RST mode, 3-byte RST handling) |
 | `--opcode <byte> <text>` | Custom opcode extension (e.g. RST 8 + trailing byte) |
 | `--noautomaticaddr` | Suppress automatic 0x0000 / SNA entry seeding |
 | `--rstend <addr>` | Do not follow RST at this address |
@@ -223,13 +224,13 @@ The `--symbols` flag imports a curated symbol file with user-managed names and m
 - One `org` directive per contiguous memory block
 - Flush-left labels, tab-indented instructions
 - Data bytes grouped as `defb` (8 per line) or `defs N, 0` for zero runs ≥ 16 bytes
-- CPC RST 3-byte opcodes → `rst` + `defw` (when `--cpc`)
-- Custom `--opcode` extensions → base instruction + `defb`/`defw` (when not `--cpc`)
+- CPC RST 3-byte opcodes → `rst` + `defw` (when `--machine cpc`)
+- Custom `--opcode` extensions → base instruction + `defb`/`defw` (when not `--machine cpc`)
 - Hard errors: maxam + ZX Next opcode, or label colliding with assembler reserved word
 
 ---
 
-## CPC Mode (--cpc)
+## CPC Mode (--machine cpc)
 
 Enables Amstrad CPC firmware RST handling. The eight RST opcodes (C7–FF) are
 decoded as extended firmware calls rather than plain Z80 restarts:

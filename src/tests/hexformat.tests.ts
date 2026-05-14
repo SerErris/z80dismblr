@@ -272,7 +272,7 @@ suite('Hex format', () => {
 
 
 	// ── CPC RST combined with hex formats ─────────────────────────────────────
-	// Proves that --cpc and --hexformat are completely independent axes.
+	// Proves that --machine cpc and --hexformat are completely independent axes.
 	// Tests use formatCpcRst() directly with each hex format.
 
 	suite('CPC RST combined with hex formats', () => {

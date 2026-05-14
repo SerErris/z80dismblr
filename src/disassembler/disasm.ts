@@ -144,8 +144,9 @@ export class Disassembler extends EventEmitter {
 	/// RST addresses that appear in this list will not be followed/disassembled.
 	public rstDontFollowAddresses = new Array<number>();
 
-	/// Amstrad CPC mode: treat RST opcodes as extended CPC firmware calls.
-	public cpcMode = false;
+	/// Target machine selector. Drives machine-specific decoding (CPC RST
+	/// dispatch, FAR CALL pointer records, …). Selected via `--machine <name>`.
+	public machine: 'none' | 'cpc' = 'none';
 
 	/// Entries collected for --argsout: user-provided --datalabel/--datarange entries
 	/// plus any entries discovered automatically during disassembly (e.g. CPC RST analysis).
@@ -718,7 +719,7 @@ export class Disassembler extends EventEmitter {
 				}
 
 				// CPC RST intercept: handle extended RST opcodes in CPC mode
-				if (this.cpcMode) {
+				if (this.machine === 'cpc') {
 					const rawByte = this.memory.getRawAt(address);   // M1 opcode fetch
 					const rstInfo = CPC_RST.get(rawByte);
 					if (rstInfo) {
@@ -2960,7 +2961,7 @@ export class Disassembler extends EventEmitter {
 				let commentText;
 
 				// CPC RST output intercept
-				if (this.cpcMode && (attr & MemAttribute.CODE)) {
+				if (this.machine === 'cpc' && (attr & MemAttribute.CODE)) {
 					const rawByte = this.memory.getRawAt(address);   // M1 opcode fetch
 					const rstInfo = CPC_RST.get(rawByte);
 					if (rstInfo) {

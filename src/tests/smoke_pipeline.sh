@@ -18,7 +18,7 @@ node out/z80dismblr.js \
     --datarange 0xC000  6  \
     --datarange 0xC0FA 71  \
     --datarange 0xC200 32  \
-    --cpc \
+    --machine cpc \
     --cleanout "$DATA/smoke_test_out.s" \
     --cleanout-format sjasmplus
 

@@ -885,7 +885,7 @@ KM_EXP_BUFFER
                 defb    #00, #00, #00, #00
 ```
 
-Hex style follows the target assembler only. The existing `--cpc` flag
+Hex style follows the target assembler only. The existing `--machine cpc` flag
 is **not** consulted by the clean-output emitter; it continues to
 affect RST handling only. If a user wants `#AB` with sjasmplus they
 pass `--cleanout-hex cpc` explicitly.
@@ -919,7 +919,7 @@ Each target assembler has a conventional hex notation and we follow it:
 - **maxam** → `#AB` (canonical notation in the Amstrad CPC firmware
   manual and in almost all CPC source code written against it).
 
-`--cpc` is **not** consulted by the clean-output emitter. It remains
+`--machine cpc` is **not** consulted by the clean-output emitter. It remains
 solely an RST-handling switch. Users who want a non-default hex style
 for a given target pass `--cleanout-hex` explicitly.
 
@@ -1123,7 +1123,7 @@ back into:
 The `appendValues` array carries the real byte values, so no
 re-reading of memory is needed.
 
-**Mutually exclusive with `--cpc` mode.** When `--cpc` is active the
+**Mutually exclusive with `--machine cpc` mode.** When `--machine cpc` is active the
 CPC RST handling in §6.7.5 takes over and `--opcode` extensions are
 ignored — mixing the two paths would double-count the inline bytes.
 
@@ -1163,26 +1163,26 @@ either the whole file assembles cleanly or nothing is written.
 
 #### 6.7.5 CPC RST 3-byte opcodes (takes precedence over `--opcode`)
 
-When `--cpc` is active, CPC firmware RST instructions occupy 3 bytes
+When `--machine cpc` is active, CPC firmware RST instructions occupy 3 bytes
 in memory (RST opcode + 2 inline bytes) and must emit as two lines:
 the RST mnemonic plus a `defw` for the inline target. This is handled
 by the existing `cpcRst.ts` module.
 
-**Rule:** `--cpc` mode and `--opcode` extensions are mutually exclusive
-in the clean emitter. When `--cpc` is active, any `--opcode` custom
+**Rule:** `--machine cpc` mode and `--opcode` extensions are mutually exclusive
+in the clean emitter. When `--machine cpc` is active, any `--opcode` custom
 extensions (§6.7.2) are **ignored** — CPC RST handling produces the
 correct byte layout on its own, and mixing the two paths would double-
 count the inline bytes.
 
 Concretely:
 
-- `--cpc` active → use `cpcRst.ts` output (`rst` + `defw`). Skip §6.7.2
+- `--machine cpc` active → use `cpcRst.ts` output (`rst` + `defw`). Skip §6.7.2
   expansion entirely.
-- `--cpc` not active → use §6.7.2 custom-`--opcode` expansion as
+- `--machine cpc` not active → use §6.7.2 custom-`--opcode` expansion as
   normal.
 
 Example clean output for a FAR CALL to `KL_INIT` at `$BB15` with
-`--cpc` active:
+`--machine cpc` active:
 
 ```
                 rst     $18
@@ -1218,7 +1218,7 @@ dialect in the clean emitter.
 
 - **Hex style defaults.** Resolved: sjasmplus → `$AB` (classic Z80
   convention), maxam → `#AB` (firmware-manual convention, already
-  dominant in CPC source). `--cpc` is an RST-handling flag only and
+  dominant in CPC source). `--machine cpc` is an RST-handling flag only and
   does not affect clean-output formatting. Users who want a non-default
   hex style pass `--cleanout-hex` explicitly.
 - **Local-label flavour.** Resolved in §6.6.1: dotted labels
@@ -1261,9 +1261,9 @@ Two independent streams; either can be built first.
 | B1 | `--cleanout`/`--cleanout-format`/`--cleanout-hex` CLI options |
 | B2 | `CleanEmitter` class with sjasmplus dialect — includes EQU prologue (§6.2) and dialect mnemonic table (§6.7.3) |
 | B2a | Invalid opcodes → `defb` raw bytes (§6.7.1) |
-| B2b | Custom `--opcode` extension expansion back into `instruction + defb` (§6.7.2). **Bypassed when `--cpc` is active** |
+| B2b | Custom `--opcode` extension expansion back into `instruction + defb` (§6.7.2). **Bypassed when `--machine cpc` is active** |
 | B2c | Label name validation against per-dialect reserved words; hard error on collision (§6.8) |
-| B2d | CPC RST 3-byte expansion: `rst` mnemonic + `defw` target line (§6.7.5). Active only when `--cpc` is set; mutually exclusive with B2b |
+| B2d | CPC RST 3-byte expansion: `rst` mnemonic + `defw` target line (§6.7.5). Active only when `--machine cpc` is set; mutually exclusive with B2b |
 | B3 | Data grouping (§6.5) |
 | B4 | **CI regression tests** — golden-file byte-diff (`cleanout.golden.test.ts`), runs as part of `npm test`. Fixtures cover: both dialects, gap handling, local labels, `DEFS` runs, EQU prologue, invalid opcodes, custom `--opcode` expansion, and **self-modifying-code labels emitted as `label+offset` references** |
 | B5 | Maxam dialect |
@@ -1299,7 +1299,7 @@ Two independent streams; either can be built first.
    `disassemble → emit → re-disassemble → emit` and byte-diffs the
    two outputs. Any drift fails the test.
 5. **Clean output: hex style default per assembler.** Resolved in §6.3:
-   `$AB` (z80) for sjasmplus, `#AB` (cpc) for maxam. `--cpc` is
+   `$AB` (z80) for sjasmplus, `#AB` (cpc) for maxam. `--machine cpc` is
    orthogonal — it controls RST handling only and does not influence
    the clean-output hex style. Users pass `--cleanout-hex` for explicit
    override.

@@ -262,12 +262,12 @@ suite('CleanEmitter — B2b custom --opcode expansion', () => {
 
 
 	// -----------------------------------------------------------------------
-	// Test 8 — --cpc active: B2b split is bypassed (mutual exclusion)
-	// When --cpc is active the appended-byte split must NOT happen; the opcode
-	// is emitted as a single mnemonic line.  Full CPC RST expansion (defw) is
-	// validated separately in B2d.
+	// Test 8 — --machine cpc active: B2b split is bypassed (mutual exclusion)
+	// When --machine cpc is active the appended-byte split must NOT happen; the
+	// opcode is emitted as a single mnemonic line.  Full CPC RST expansion
+	// (defw) is validated separately in B2d.
 	// -----------------------------------------------------------------------
-	test('--cpc active: B2b split is not applied (mutual exclusion)', () => {
+	test('--machine cpc active: B2b split is not applied (mutual exclusion)', () => {
 		// Attach a 1-byte extension to 0xCF
 		Opcodes[0xCF].appendToOpcode(', CODE=#n');
 
@@ -275,13 +275,13 @@ suite('CleanEmitter — B2b custom --opcode expansion', () => {
 		// $8002: C9
 		const e = makeEmitter(0x8000, [0xCF, 0x3E, 0xC9], dasm => {
 			dasm.setFixedCodeLabel(0x8000, 'START');
-			dasm.cpcMode = true;
+			dasm.machine = 'cpc';
 		});
 
 		const out   = e.emit();
 		const lines = out.split('\n').filter(l => l.trim().length > 0);
 
-		// With cpcMode active, the B2b split (rst on one line + defb on next) must NOT occur.
+		// With machine='cpc' active, the B2b split (rst on one line + defb on next) must NOT occur.
 		// Instead the full mnemonic (including the trailing byte value) stays on one line.
 		const rstLines  = lines.filter(l => l.trim().startsWith('rst'));
 		const defbLines = lines.filter(l => l.trim().startsWith('defb'));
@@ -389,7 +389,7 @@ suite('CleanEmitter — B2d CPC RST expansion', () => {
 		const e = makeEmitter(0x8000, [0xEF, 0x00, 0xC0, 0xC9], dasm => {
 			dasm.setFixedCodeLabel(0x8000, 'START');
 			dasm.setFixedCodeLabel(0xC000, 'MY_FUNC');  // out-of-range → EQU
-			(dasm as any).cpcMode = true;
+			dasm.machine = 'cpc';
 		});
 
 		const out   = e.emit();
@@ -412,7 +412,7 @@ suite('CleanEmitter — B2d CPC RST expansion', () => {
 	test('FIRM_JUMP ($EF): rst line is followed by a defw line', () => {
 		const e = makeEmitter(0x8000, [0xEF, 0x00, 0xC0, 0xC9], dasm => {
 			dasm.setFixedCodeLabel(0x8000, 'START');
-			(dasm as any).cpcMode = true;
+			dasm.machine = 'cpc';
 		});
 
 		const out   = e.emit();
@@ -435,7 +435,7 @@ suite('CleanEmitter — B2d CPC RST expansion', () => {
 		// $8001: C9   RET
 		const e = makeEmitter(0x8000, [0xC7, 0xC9], dasm => {
 			dasm.setFixedCodeLabel(0x8000, 'START');
-			(dasm as any).cpcMode = true;
+			dasm.machine = 'cpc';
 		});
 
 		const out   = e.emit();
@@ -459,7 +459,7 @@ suite('CleanEmitter — B2d CPC RST expansion', () => {
 		// $8001: C9  RET
 		const e = makeEmitter(0x8000, [0xC7, 0xC9], dasm => {
 			dasm.setFixedCodeLabel(0x8000, 'START');
-			(dasm as any).cpcMode = true;
+			dasm.machine = 'cpc';
 		}, 'sjasmplus', 'cpc');
 
 		const out     = e.emit();

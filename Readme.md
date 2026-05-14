@@ -645,8 +645,8 @@ the original v1.6.2 upstream.
   `entry:`, `exit-success:`, `exit-failure:`, `corrupted:`,
   `preserved:`) that map directly into the subroutine header. Plain
   prose belongs in the `--out` round-trip file instead.
-- **Amstrad CPC RST handling** — `--cpc` activates firmware far-call
-  RST decoding. See the *Machine-specific RST Handling* section.
+- **Amstrad CPC RST handling** — `--machine cpc` activates firmware
+  far-call RST decoding. See the *Machine-specific RST Handling* section.
 
 **Design documents**
 

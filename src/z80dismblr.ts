@@ -415,9 +415,13 @@ z80dismblr [options]
             RST #30 (F7) — USER RESTART: 1 byte, no operand.
             RST #38 (FF) — INTERRUPT:   1 byte, no operand.
 
-        --cpc: Enable Amstrad CPC firmware RST mode. Without this flag the disassembler
-            behaves identically to standard mode and all RST opcodes are treated as
-            plain Z80 restarts.
+        --machine name: Select a target-machine profile. Enables machine-specific
+            decoding (RST dispatch conventions, FAR CALL pointer records, …).
+            Currently supported names:
+                cpc   Amstrad CPC firmware RST handling (3-byte RST opcodes).
+            Without this option the disassembler behaves identically to standard
+            Z80 mode and all RST opcodes are treated as plain Z80 restarts.
+            Example: --machine cpc
 
         --decoder name: Enable a hardware ROM decoder for encrypted Z80 firmware.
             Opcode/prefix bytes (M1 cycles) are read raw; operand and data bytes
@@ -429,7 +433,7 @@ z80dismblr [options]
 
     Data annotation:
         The following options annotate known data areas and labels. They work
-        independently of --cpc and can be combined with any disassembly mode.
+        independently of --machine and can be combined with any disassembly mode.
 
         --datarange address length: Mark an address range as data so the disassembler
             will not attempt to decode it as code. 'length' is the size in bytes.
@@ -439,7 +443,7 @@ z80dismblr [options]
         --argsout file: After disassembly, write discovered data ranges to 'file'
             in --args format. Includes entries from --datarange as well as any ranges
             found automatically during disassembly (e.g. FAR CALL pointer tables in
-            --cpc mode). Review the file before feeding it back as --args input on a
+            --machine cpc mode). Review the file before feeding it back as --args input on a
             subsequent run. Use --symbolsout for discovered labels.
             Example: --argsout discovered.args
 
@@ -576,10 +580,19 @@ z80dismblr [options]
                     this.dasm.automaticAddresses = false;
                     break;
 
-                // Amstrad CPC mode
-                case '--cpc':
-                    this.dasm.cpcMode = true;
+                // Target machine selector
+                case '--machine': {
+                    const machineName = args.shift();
+                    if (!machineName) {
+                        throw arg + ': No machine name given. Valid: cpc';
+                    }
+                    if (machineName === 'cpc') {
+                        this.dasm.machine = 'cpc';
+                    } else {
+                        throw arg + ": Unknown machine '" + machineName + "' (valid: cpc)";
+                    }
                     break;
+                }
 
                 // Hardware-decrypting ROM decoder (opt-in, very specific use case)
                 case '--decoder':

@@ -5,7 +5,7 @@ for the `cleanout_smoke_test.md` procedure.  Its only purpose is to
 exercise every clean-emitter code path so that:
 
 - `firmware_test.s` → `sjasmplus` → `firmware_test.bin` →
-  `z80dismblr --cpc --cleanout smoke_test_out.s` → `sjasmplus` →
+  `z80dismblr --machine cpc --cleanout smoke_test_out.s` → `sjasmplus` →
   `smoke_test_out.bin` must equal `firmware_test.bin` **byte for byte**.
 - Any emitter path not exercised here is a coverage gap that will
   silently escape the smoke test — so we list every feature up front
@@ -574,7 +574,7 @@ node out/z80dismblr.js \
     --datarange 0xC0FA 71  \
     --datarange 0xC200 32  \
     \
-    --cpc \
+    --machine cpc \
     --cleanout src/tests/data/smoke_test_out.s \
     --cleanout-format sjasmplus
 
@@ -597,7 +597,7 @@ cmp src/tests/data/smoke_test_block2.bin src/tests/data/smoke_test_out_block2.bi
 echo "Binary round-trip: OK" || echo "Binary round-trip: FAIL"
 ```
 
-`--cpc` is mandatory — it enables 3-byte RST handling, which is what
+`--machine cpc` is mandatory — it enables 3-byte RST handling, which is what
 drives the `rst $18` / `defw TXT_OUTPUT` expansion.  Without it, the
 `rst $18` opcode is decoded as a 1-byte Z80 instruction and the two
 inline bytes become orphan data, breaking the round-trip.

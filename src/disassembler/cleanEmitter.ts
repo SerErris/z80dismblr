@@ -314,8 +314,8 @@ export class CleanEmitter {
 					}
 
 					if (attr & MemAttribute.CODE) {
-						// B2d — CPC RST 3-byte expansion (active only when --cpc is set)
-						if (this.dasm.cpcMode) {
+						// B2d — CPC RST 3-byte expansion (active only when --machine cpc is set)
+						if (this.dasm.machine === 'cpc') {
 							const opByte  = memory.getRawAt(walkAddress);   // M1 opcode fetch
 							const cpcInfo = CPC_RST.get(opByte);
 							if (cpcInfo) {
@@ -340,8 +340,8 @@ export class CleanEmitter {
 							for (let i = 0; i < opcode.length; i++)
 								lines.push('\t\t\tdefb\t' + Format.formatHex(memory.getRawAt(walkAddress + i), 2));  // invalid opcode: M1 bytes, keep raw
 							walkAddress += opcode.length;
-						} else if (opcode.appendValueTypes && !this.dasm.cpcMode) {
-							// B2b — custom --opcode extension (active only when --cpc is NOT set):
+						} else if (opcode.appendValueTypes && this.dasm.machine !== 'cpc') {
+							// B2b — custom --opcode extension (active only when --machine cpc is NOT set):
 							// emit base mnemonic on its own line, then one defb/defw per appended byte.
 							const desc        = opcode.disassemble(memory);
 							const baseMnemonic = this.stripAppendSuffix(opcode, desc.mnemonic);

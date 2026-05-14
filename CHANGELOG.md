@@ -1,3 +1,10 @@
+## 2.2.0
+- **Breaking change:** `--cpc` flag removed. Use `--machine cpc` instead.
+- New `--machine <name>` option introduced as the general target-machine selector. Only accepted value for now is `cpc`; future Z80 targets (other firmware ROMs with machine-specific RST conventions) can be added under the same flag without further CLI proliferation.
+- Any existing `--args` file or wrapper script that still passes `--cpc` will fail with "unknown option". No deprecation alias is provided — update call sites to `--machine cpc`.
+- Internally, `Disassembler.cpcMode: boolean` has been replaced with `Disassembler.machine: 'none' | 'cpc'`.
+
+
 ## 2.1.0
 - Stream A: round-trip comment preservation — annotations in the `.asm` output file are automatically re-imported on the next run.
 - Line classifier (`asmClassifier.ts`) produces a typed event stream from any `.asm` file; each line is classified independently.
