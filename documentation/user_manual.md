@@ -18,6 +18,10 @@ Key capabilities:
 
 1. [Overview](#1-overview)
 2. [Installation & Build](#2-installation--build)
+   - 2.1 [Requirements](#21-requirements)
+   - 2.1a [Environment Setup — Ubuntu 24.04+](#21a-environment-setup--ubuntu-2404-and-later)
+   - 2.2 [Install and Compile](#22-install-and-compile)
+   - 2.3 [Standalone Executables](#23-standalone-executables-no-nodejs-required)
 3. [Quick Start](#3-quick-start)
 4. [The Iterative Workflow](#4-the-iterative-workflow)
    - 4.1 [First Run](#41-first-run)
@@ -74,10 +78,106 @@ Key capabilities:
 
 ## 2. Installation & Build
 
-### 2.1 Prerequisites
+### 2.1 Requirements
 
-- **Node.js ≥ 18** — [nodejs.org](https://nodejs.org)
-- **npm** — bundled with Node.js
+**Minimum:**
+
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| Node.js | ≥ 18.0 | Required for running from source |
+| npm | ≥ 9.0 | Bundled with Node.js |
+
+**Optional (for clean output reassembly verification):**
+
+| Tool | Purpose |
+|------|---------|
+| `sjasmplus` | Assemble `--cleanout` output in sjasmplus dialect |
+| `maxam` / `WinAPE` | Assemble `--cleanout` output in maxam dialect |
+
+If you use the pre-built binaries from the [Releases page](https://github.com/SerErris/z80map/releases), **Node.js is not required**.
+
+---
+
+### 2.1a Environment Setup — Ubuntu 24.04 LTS and later
+
+Ubuntu 24.04 Noble Numbat ships with Node.js 18 in the default repositories.
+The following commands set up a complete z80map development environment from scratch.
+
+**Step 1 — Update the system**
+
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+
+**Step 2 — Install Node.js and npm**
+
+```bash
+# Option A: default Ubuntu repository (Node 18 on Ubuntu 24.04)
+sudo apt install -y nodejs npm
+node --version   # must be >= 18
+npm --version
+
+# Option B: NodeSource PPA for Node 20 LTS (recommended for longevity)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+node --version   # should show v20.x.x
+```
+
+**Step 3 — Install git**
+
+```bash
+sudo apt install -y git
+```
+
+**Step 4 — Clone and build z80map**
+
+```bash
+git clone https://github.com/SerErris/z80map.git
+cd z80map
+npm install
+npm run compile
+npm test             # 677 tests should pass
+```
+
+**Step 5 — Optional: make z80map available system-wide**
+
+Either use the pre-built binary:
+
+```bash
+# Download and install the Linux binary
+wget https://github.com/SerErris/z80map/releases/download/v3.1.0/z80map-3.1.0-linux-x64.zip
+unzip z80map-3.1.0-linux-x64.zip
+chmod +x z80map-linux-x64
+sudo mv z80map-linux-x64 /usr/local/bin/z80map
+z80map --version
+```
+
+Or build your own binary from source:
+
+```bash
+# From inside the z80map repository
+npm run package         # builds all platform binaries
+chmod +x z80map-linux
+sudo mv z80map-linux /usr/local/bin/z80map
+z80map --version
+```
+
+**Step 6 — Optional: install sjasmplus for reassembly verification**
+
+```bash
+sudo apt install -y sjasmplus
+sjasmplus --version
+```
+
+If sjasmplus is not in the Ubuntu repository for your version, build from source:
+
+```bash
+sudo apt install -y cmake g++ libboost-dev
+git clone https://github.com/z00m128/sjasmplus.git
+cd sjasmplus && cmake . && make && sudo make install
+```
+
+---
 
 ### 2.2 Install and Compile
 

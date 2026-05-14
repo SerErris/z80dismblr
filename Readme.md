@@ -19,6 +19,8 @@
 
 ## Quick start
 
+**Requirements:** Node.js ≥ 18, npm — or download a [pre-built binary](https://github.com/SerErris/z80map/releases) (no Node.js needed).
+
 ```bash
 # Install and compile from source
 npm install && npm run compile
