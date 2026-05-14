@@ -80,12 +80,21 @@ Key capabilities:
 
 ### 2.1 Requirements
 
-**Minimum:**
+**Minimum (running from source):**
 
 | Requirement | Version | Notes |
 |-------------|---------|-------|
-| Node.js | ≥ 18.0 | Required for running from source |
-| npm | ≥ 9.0 | Bundled with Node.js |
+| Node.js | ≥ 18.0 | JavaScript runtime |
+| npm | ≥ 9.0 | Package manager; bundled with Node.js |
+| TypeScript (`tsc`) | ≥ 4.4 | Installed automatically by `npm install` |
+
+**For compiling to standalone executables (`npm run package`):**
+
+| Requirement | Notes |
+|-------------|-------|
+| `@yao-pkg/pkg` | Downloaded automatically via `npx`; no manual install |
+| `zip` | System utility for creating distribution archives |
+| Internet access | `@yao-pkg/pkg` downloads Node.js runtimes (~200 MB total, cached after first run) |
 
 **Optional (for clean output reassembly verification):**
 
@@ -103,48 +112,92 @@ If you use the pre-built binaries from the [Releases page](https://github.com/Se
 Ubuntu 24.04 Noble Numbat ships with Node.js 18 in the default repositories.
 The following commands set up a complete z80map development environment from scratch.
 
-**Step 1 — Update the system**
+**Step 1 — Update the system and install required utilities**
 
 ```bash
 sudo apt update && sudo apt upgrade -y
+
+# Essential utilities used throughout this guide
+sudo apt install -y \
+    curl            \   # HTTP downloads; needed for NodeSource PPA (Step 2)
+    wget            \   # alternative downloader (Step 5)
+    git             \   # source code checkout (Step 3)
+    zip unzip       \   # create / extract release archives (Step 5)
+    ca-certificates     # TLS certificate validation
 ```
 
 **Step 2 — Install Node.js and npm**
 
-```bash
-# Option A: default Ubuntu repository (Node 18 on Ubuntu 24.04)
-sudo apt install -y nodejs npm
-node --version   # must be >= 18
-npm --version
+z80map requires **Node.js ≥ 18**. Ubuntu 24.04 ships Node 18 via `apt`.
+For longer-term support, Node 20 LTS is recommended.
 
-# Option B: NodeSource PPA for Node 20 LTS (recommended for longevity)
+```bash
+# Option A: Ubuntu repository — Node 18 (ships with Ubuntu 24.04)
+sudo apt install -y nodejs npm
+node --version   # confirm >= 18
+npm --version    # confirm >= 9
+
+# Option B: NodeSource PPA — Node 20 LTS (recommended)
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 node --version   # should show v20.x.x
+npm --version
 ```
 
-**Step 3 — Install git**
-
-```bash
-sudo apt install -y git
-```
-
-**Step 4 — Clone and build z80map**
+**Step 3 — Clone the z80map repository**
 
 ```bash
 git clone https://github.com/SerErris/z80map.git
 cd z80map
-npm install
-npm run compile
+```
+
+**Step 4 — Install JavaScript dependencies and compile TypeScript**
+
+The TypeScript compiler (`tsc`) is included in `devDependencies` and is installed
+by `npm install` — no separate global install is required.
+
+```bash
+npm install          # downloads all dependencies including TypeScript
+npm run compile      # transpiles src/*.ts → out/*.js
 npm test             # 677 tests should pass
 ```
 
-**Step 5 — Optional: make z80map available system-wide**
+**Step 5 — Compile to standalone executables (optional)**
 
-Either use the pre-built binary:
+z80map can be packaged into a single self-contained binary using
+[`@yao-pkg/pkg`](https://github.com/yao-pkg/pkg). The packager is invoked
+automatically via `npx` — no global install is required.
+
+> **Note:** On first run, `@yao-pkg/pkg` downloads pre-built Node.js runtime
+> binaries (~50–60 MB each) for each target platform. The four targets
+> (Linux, macOS Intel, macOS ARM64, Windows) download approximately 200 MB in
+> total. Downloads are cached in `~/.pkg-cache/` for subsequent builds.
 
 ```bash
-# Download and install the Linux binary
+# Build all four platform binaries in one command
+npm run package
+
+# Output files created in the current directory:
+#   z80map-linux        Linux x86-64
+#   z80map-macos        macOS Intel
+#   z80map-macos-arm64  macOS Apple Silicon
+#   z80map-win.exe      Windows x86-64
+
+# Create zip archives for distribution
+zip z80map-linux-x64.zip   z80map-linux
+zip z80map-macos-x64.zip   z80map-macos
+zip z80map-macos-arm64.zip z80map-macos-arm64
+zip z80map-win-x64.zip     z80map-win.exe
+
+# Install the Linux binary system-wide
+chmod +x z80map-linux
+sudo mv z80map-linux /usr/local/bin/z80map
+z80map --version   # should report 3.1.0
+```
+
+Alternatively, download the pre-built binary from the Releases page:
+
+```bash
 wget https://github.com/SerErris/z80map/releases/download/v3.1.0/z80map-3.1.0-linux-x64.zip
 unzip z80map-3.1.0-linux-x64.zip
 chmod +x z80map-linux-x64
@@ -152,29 +205,24 @@ sudo mv z80map-linux-x64 /usr/local/bin/z80map
 z80map --version
 ```
 
-Or build your own binary from source:
-
-```bash
-# From inside the z80map repository
-npm run package         # builds all platform binaries
-chmod +x z80map-linux
-sudo mv z80map-linux /usr/local/bin/z80map
-z80map --version
-```
-
 **Step 6 — Optional: install sjasmplus for reassembly verification**
 
+sjasmplus is used to verify that `--cleanout` output re-assembles to the
+original binary byte-for-byte (see §9 and §18).
+
 ```bash
+# Try the Ubuntu repository first
 sudo apt install -y sjasmplus
 sjasmplus --version
 ```
 
-If sjasmplus is not in the Ubuntu repository for your version, build from source:
+If sjasmplus is not available in the repository, build it from source:
 
 ```bash
 sudo apt install -y cmake g++ libboost-dev
 git clone https://github.com/z00m128/sjasmplus.git
-cd sjasmplus && cmake . && make && sudo make install
+cd sjasmplus && cmake . && make -j$(nproc) && sudo make install
+sjasmplus --version
 ```
 
 ---
