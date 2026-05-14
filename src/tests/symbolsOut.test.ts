@@ -188,19 +188,18 @@ suite('A10 — writeSymbolsOut', () => {
                 'exit-failure placeholder must immediately precede address line');
         });
 
-        test('user-supplied out-of-range (EQU) labels appear in --symbolsout', () => {
-            // Addresses outside the loaded binary become EQU labels. They must
-            // still appear in --symbolsout when the user explicitly named them
-            // via --symbols (isFixed=true).
+        test('user-supplied (isFixed) labels are excluded from --symbolsout', () => {
+            // Labels from --symbols input are marked isFixed. They must not
+            // appear in --symbolsout so the output can be appended to the
+            // --symbols file without creating duplicates.
             const dasm = makeDasm();
-            // 0xBB00 is outside the 0x0000-0x0012 binary — becomes an EQU label.
-            dasm.setLabel(0xBB00, 'KL_CHOKE_OFF');
-            const lbl = dasm.labels.get(0xBB00);
+            dasm.setLabel(0x0000, 'MY_ENTRY');
+            const lbl = dasm.labels.get(0x0000);
             lbl.isFixed = true;
             dasm.disassemble();
             const symbols: SymbolEntry[] = dasm.getSymbolsData();
-            const found = symbols.find((s: SymbolEntry) => s.name === 'KL_CHOKE_OFF');
-            assert.ok(found, 'isFixed EQU label must be included in getSymbolsData()');
+            const found = symbols.find((s: SymbolEntry) => s.name === 'MY_ENTRY');
+            assert.ok(!found, 'isFixed label must be excluded from getSymbolsData()');
         });
     });
 });

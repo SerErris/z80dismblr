@@ -452,9 +452,11 @@ z80map [options]
             Example: --argsout discovered.args
 
         --symbolsout file: After disassembly, write a skeleton symbol file
-            containing all discovered labels with empty structured-field
-            placeholders. No prose comments are emitted. Review and merge
-            the output into your main --symbols file.
+            containing labels discovered during this run that are not already
+            present in any --symbols input file. Empty structured-field
+            placeholders are emitted for subroutines. No prose comments are
+            emitted. The output can be appended directly to your --symbols
+            file without creating duplicates.
             Example: --symbolsout discovered.sym
     `);
     }

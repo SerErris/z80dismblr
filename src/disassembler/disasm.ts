@@ -642,7 +642,8 @@ export class Disassembler extends EventEmitter {
 				 label.type === NumberType.CODE_RST ||
 				 label.type === NumberType.CODE_LBL ||
 				 label.type === NumberType.DATA_LBL) &&
-				(!label.isEqu || label.isFixed))
+				!label.isEqu &&
+				!label.isFixed)
 			.sort(([a], [b]) => a - b)
 			.map(([addr, label]) => ({
 				addr,
