@@ -14,7 +14,28 @@ import {readFileSync} from 'fs';
 import {classifyAsmFile, AsmEvent} from './asmClassifier';
 import {CPC_RST, analyzeCpcRst, formatCpcRst} from './cpcRst';
 import {DiscoveredEntry} from './argsWriter';
-import {PortLabel, parsePortAddress} from './portLabel';
+import {PortLabel, PortLookupQuery, parsePortAddress, lookupPort} from './portLabel';
+import {BcState, trackBcAt} from './bcTrack';
+
+
+/**
+ * Per-I/O-instruction annotation built by `analyseIoPorts()`. Each entry
+ * keys the `IN r,(C)` / `OUT (C),r` instruction address.
+ *
+ * The formatter (P5) consults this map to append `; Port #xxxx (NAME)` or
+ * partial-port annotations to the I/O line.
+ */
+export interface IoAnnotation {
+	/** BC state at the I/O instruction, as resolved by the BC tracker. */
+	bcState: BcState;
+	/** Best-matching port label (`undefined` when no label matched). */
+	portLabel?: PortLabel;
+	/**
+	 * Address of the most recent `LD BC,nn` whose immediate still equals
+	 * the live BC value. Used by the operand-substitution phase (P6).
+	 */
+	sourceLdBcAddr?: number;
+}
 import {StructuredFields, Z80Register} from './registerAnalysis';
 import {RegAnalyzer, AnalyserContext} from './reganalyzer';
 import {
@@ -154,6 +175,16 @@ export class Disassembler extends EventEmitter {
 	/// (port #F400 ≠ memory #F400). Supports wildcards via mask. See
 	/// design/todo.md §3.
 	public portLabels: Array<PortLabel> = [];
+
+	/// Resolved I/O annotations, keyed by I/O-instruction address. Populated
+	/// by analyseIoPorts() after the CFG walk but before disassembleMemory().
+	public ioAnnotations: Map<number, IoAnnotation> = new Map();
+
+	/// `LD BC,nn` addresses whose immediate exactly matches an exact-match
+	/// (`mask === 0xFFFF`) port label AND whose BC value reaches an I/O
+	/// instruction unmodified. Used by the operand-substitution emitter
+	/// (P6). Keyed by the `LD BC,nn` address; value = the port label.
+	public ldBcPortSubstitutions: Map<number, PortLabel> = new Map();
 
 	/// Entries collected for --argsout: user-provided --datalabel/--datarange entries
 	/// plus any entries discovered automatically during disassembly (e.g. CPC RST analysis).
@@ -324,6 +355,9 @@ export class Disassembler extends EventEmitter {
 		if (!this.disableCommentsInDisassembly)
 			this.addLabelComments();
 
+		// Resolve I/O port annotations (§3) — links each IN r,(C) / OUT (C),r
+		// site to a port label via the BC tracker.
+		this.analyseIoPorts();
 
 		// Disassemble opcode with label names
 		const disLines = this.disassembleMemory();
@@ -1959,6 +1993,86 @@ export class Disassembler extends EventEmitter {
 				if (count > 1)
 					child.name += indexString;
 				index++;
+			}
+		}
+	}
+
+
+	/**
+	 * Resolves I/O-port annotations for every `IN r,(C)` / `OUT (C),r`
+	 * instruction in the disassembled binary. Populates
+	 * `ioAnnotations` (one entry per I/O site) and `ldBcPortSubstitutions`
+	 * (one entry per `LD BC,nn` whose immediate exactly matches a port
+	 * label and whose BC value reaches the I/O unmodified).
+	 *
+	 * Identifies I/O instructions via the ED-prefix opcode pattern:
+	 * `op2 & 0xC6 === 0x40` covers all 16 `IN r,(C)` / `OUT (C),r`
+	 * variants (ED 40/41/48/49/50/51/58/59/60/61/68/69/70/71/78/79).
+	 *
+	 * For each site, queries the BC tracker, then looks up the best-
+	 * matching port label per the query kind (full / B-only / C-only).
+	 * Skips entries where BC is fully unknown AND no label matched —
+	 * nothing useful to annotate.
+	 *
+	 * Called from disassemble() between addLabelComments() and
+	 * disassembleMemory(). Safe to call repeatedly: each invocation
+	 * starts from empty maps.
+	 */
+	public analyseIoPorts(): void {
+		this.ioAnnotations          = new Map();
+		this.ldBcPortSubstitutions  = new Map();
+
+		// Fast-out: no port labels declared → nothing to resolve, but we
+		// still don't bail because we may want to emit "; Port #xxxx" for
+		// fully-known BC even without a label match.
+		// (Actually we do bail when both BC is unknown AND no label exists.)
+
+		for (let addr = 0; addr <= 0xFFFF; addr++) {
+			const attr = this.memory.getAttributeAt(addr);
+			if (!(attr & MemAttribute.ASSIGNED))   continue;
+			if (!(attr & MemAttribute.CODE_FIRST)) continue;
+			if (this.memory.getRawAt(addr) !== 0xED) continue;
+			const op2 = this.memory.getRawAt(addr + 1);
+			// IN r,(C) / OUT (C),r: bits 7-6 = 01, bit 2 = 0 (low 3 bits 000 or 001)
+			if ((op2 & 0xC6) !== 0x40) continue;
+
+			// Resolve BC at this instruction.
+			const {state, sourceLdBcAddr} = trackBcAt(this.memory, this.labels, addr);
+
+			// Build a port-lookup query from whatever we know.
+			let query: PortLookupQuery | undefined;
+			if (state.b !== undefined && state.c !== undefined)
+				query = {kind: 'full',     port: ((state.b & 0xFF) << 8) | (state.c & 0xFF)};
+			else if (state.b !== undefined)
+				query = {kind: 'highByte', b:    state.b};
+			else if (state.c !== undefined)
+				query = {kind: 'lowByte',  c:    state.c};
+
+			const portLabel = query ? lookupPort(this.portLabels, query) : undefined;
+
+			// Skip the no-information case: BC fully unknown and no label.
+			if (state.b === undefined && state.c === undefined && portLabel === undefined)
+				continue;
+
+			const annotation: IoAnnotation = {bcState: state};
+			if (portLabel        !== undefined) annotation.portLabel      = portLabel;
+			if (sourceLdBcAddr   !== undefined) annotation.sourceLdBcAddr = sourceLdBcAddr;
+			this.ioAnnotations.set(addr, annotation);
+
+			// P6 operand substitution: only when the matched label is exact-match
+			// AND its address equals the `LD BC,nn` immediate AND there is a
+			// source LD BC,nn. This rejects e.g. `LD BC,#7F10` against a
+			// `port:7F?? GATE_ARRAY` (wildcard) because we don't want to write
+			// `LD BC,GATE_ARRAY + #10`.
+			if (portLabel !== undefined
+				&& portLabel.mask === 0xFFFF
+				&& sourceLdBcAddr !== undefined
+			) {
+				const lo  = this.memory.getValueAt(sourceLdBcAddr + 1);
+				const hi  = this.memory.getValueAt(sourceLdBcAddr + 2);
+				const imm = ((hi & 0xFF) << 8) | (lo & 0xFF);
+				if (imm === portLabel.address)
+					this.ldBcPortSubstitutions.set(sourceLdBcAddr, portLabel);
 			}
 		}
 	}

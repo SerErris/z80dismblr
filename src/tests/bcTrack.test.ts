@@ -9,16 +9,18 @@
 
 import assert = require('assert');
 import { Disassembler } from '../disassembler/disasm';
-import { trackBcAt, BcState } from '../disassembler/bcTrack';
+import { trackBcAt, BcState, BcResult } from '../disassembler/bcTrack';
 
 
 /**
  * Builds a Disassembler, loads bytes at `org`, runs disassemble(),
- * and returns the dasm + a tiny query helper.
+ * and returns the dasm + two helpers: `query` (just the BC state) and
+ * `queryFull` (the full BcResult including sourceLdBcAddr).
  */
 function makeDasm(org: number, bytes: number[]): {
-	dasm:  any;
-	query: (ioAddr: number) => BcState;
+	dasm:      any;
+	query:     (ioAddr: number) => BcState;
+	queryFull: (ioAddr: number) => BcResult;
 } {
 	const dasm = new Disassembler() as any;
 	dasm.memory.setMemory(org, new Uint8Array(bytes));
@@ -26,7 +28,8 @@ function makeDasm(org: number, bytes: number[]): {
 	dasm.disassemble();
 	return {
 		dasm,
-		query: (ioAddr: number) => trackBcAt(dasm.memory, dasm.labels, ioAddr),
+		query:     (ioAddr: number) => trackBcAt(dasm.memory, dasm.labels, ioAddr).state,
+		queryFull: (ioAddr: number) => trackBcAt(dasm.memory, dasm.labels, ioAddr),
 	};
 }
 
@@ -365,7 +368,7 @@ suite('trackBcAt — label boundary', () => {
 		// A label is placed at $8006 by the JP target processing. The walkback
 		// from $8006 stops there → BC unknown going into the OUT.
 		assert.deepStrictEqual(
-			trackBcAt(dasm.memory, dasm.labels, 0x8006),
+			trackBcAt(dasm.memory, dasm.labels, 0x8006).state,
 			{b: undefined, c: undefined});
 	});
 
@@ -394,6 +397,114 @@ suite('trackBcAt — I/O instructions are not applied to state', () => {
 			[0x01, 0x7E, 0xFB, 0xED, 0x49, 0xED, 0x49]);
 		assert.deepStrictEqual(query(0x8003), {b: 0xFB, c: 0x7E});
 		assert.deepStrictEqual(query(0x8005), {b: 0xFB, c: 0x7E});
+	});
+
+});
+
+
+// ---------------------------------------------------------------------------
+// sourceLdBcAddr tracking (for P6 operand substitution)
+// ---------------------------------------------------------------------------
+
+suite('trackBcAt — sourceLdBcAddr (LD BC,nn invariant tracking)', () => {
+
+	test('LD BC,nn directly before I/O → source is the LD BC address', () => {
+		// $8000: 01 FD FF  LD BC,$FFFD
+		// $8003: ED 79     OUT (C),A
+		const { queryFull } = makeDasm(0x8000, [0x01, 0xFD, 0xFF, 0xED, 0x79]);
+		const r = queryFull(0x8003);
+		assert.deepStrictEqual(r.state, {b: 0xFF, c: 0xFD});
+		assert.strictEqual(r.sourceLdBcAddr, 0x8000);
+	});
+
+	test('LD BC,nn + non-touching ops between → source preserved', () => {
+		// $8000: 01 FD FF  LD BC,$FFFD
+		// $8003: 3E 42     LD A,$42      ; doesn't touch BC
+		// $8005: 00        NOP
+		// $8006: ED 79     OUT (C),A
+		const { queryFull } = makeDasm(0x8000,
+			[0x01, 0xFD, 0xFF, 0x3E, 0x42, 0x00, 0xED, 0x79]);
+		const r = queryFull(0x8006);
+		assert.deepStrictEqual(r.state, {b: 0xFF, c: 0xFD});
+		assert.strictEqual(r.sourceLdBcAddr, 0x8000);
+	});
+
+	test('LD BC,nn + INC BC → source cleared (immediate no longer matches live BC)', () => {
+		// $8000: 01 7E FB  LD BC,$FB7E
+		// $8003: 03        INC BC          ; → $FB7F
+		// $8004: ED 49     OUT (C),C
+		const { queryFull } = makeDasm(0x8000,
+			[0x01, 0x7E, 0xFB, 0x03, 0xED, 0x49]);
+		const r = queryFull(0x8004);
+		assert.deepStrictEqual(r.state, {b: 0xFB, c: 0x7F});
+		assert.strictEqual(r.sourceLdBcAddr, undefined);
+	});
+
+	test('LD BC,nn + INC B → source cleared', () => {
+		// $8000: 01 01 BC  LD BC,$BC01
+		// $8003: 04        INC B
+		// $8004: ED 49     OUT (C),C
+		const { queryFull } = makeDasm(0x8000, [0x01, 0x01, 0xBC, 0x04, 0xED, 0x49]);
+		assert.strictEqual(queryFull(0x8004).sourceLdBcAddr, undefined);
+	});
+
+	test('LD BC,nn + LD C,#n → source cleared', () => {
+		// $8000: 01 01 BC  LD BC,$BC01
+		// $8003: 0E 23     LD C,$23
+		// $8005: ED 49     OUT (C),C
+		const { queryFull } = makeDasm(0x8000,
+			[0x01, 0x01, 0xBC, 0x0E, 0x23, 0xED, 0x49]);
+		assert.strictEqual(queryFull(0x8005).sourceLdBcAddr, undefined);
+	});
+
+	test('Two LD BC,nn in a row — most recent is the source', () => {
+		// $8000: 01 7E FB  LD BC,$FB7E
+		// $8003: 01 FD FF  LD BC,$FFFD
+		// $8006: ED 79     OUT (C),A
+		const { queryFull } = makeDasm(0x8000,
+			[0x01, 0x7E, 0xFB, 0x01, 0xFD, 0xFF, 0xED, 0x79]);
+		const r = queryFull(0x8006);
+		assert.deepStrictEqual(r.state, {b: 0xFF, c: 0xFD});
+		assert.strictEqual(r.sourceLdBcAddr, 0x8003);
+	});
+
+	test('LD B,#n + LD C,#n pair — no LD BC,nn → source undefined', () => {
+		// $8000: 06 7F     LD B,$7F
+		// $8002: 0E 10     LD C,$10
+		// $8004: ED 79     OUT (C),A
+		const { queryFull } = makeDasm(0x8000, [0x06, 0x7F, 0x0E, 0x10, 0xED, 0x79]);
+		const r = queryFull(0x8004);
+		assert.deepStrictEqual(r.state, {b: 0x7F, c: 0x10});
+		assert.strictEqual(r.sourceLdBcAddr, undefined);
+	});
+
+	test('CALL between LD BC and I/O → source cleared (and state unknown)', () => {
+		// $8000: 01 FD FF  LD BC,$FFFD
+		// $8003: CD 00 90  CALL $9000
+		// $8006: ED 79     OUT (C),A
+		const { queryFull } = makeDasm(0x8000,
+			[0x01, 0xFD, 0xFF, 0xCD, 0x00, 0x90, 0xED, 0x79]);
+		const r = queryFull(0x8006);
+		assert.strictEqual(r.sourceLdBcAddr, undefined);
+	});
+
+	test('LD B,B (no-op) does NOT clear source', () => {
+		// $8000: 01 FD FF  LD BC,$FFFD
+		// $8003: 40        LD B,B          ; no-op
+		// $8004: ED 79     OUT (C),A
+		const { queryFull } = makeDasm(0x8000, [0x01, 0xFD, 0xFF, 0x40, 0xED, 0x79]);
+		const r = queryFull(0x8004);
+		assert.deepStrictEqual(r.state, {b: 0xFF, c: 0xFD});
+		assert.strictEqual(r.sourceLdBcAddr, 0x8000);
+	});
+
+	test('LD C,C (no-op) does NOT clear source', () => {
+		// $8000: 01 FD FF  LD BC,$FFFD
+		// $8003: 49        LD C,C          ; no-op
+		// $8004: ED 79     OUT (C),A
+		const { queryFull } = makeDasm(0x8000, [0x01, 0xFD, 0xFF, 0x49, 0xED, 0x79]);
+		const r = queryFull(0x8004);
+		assert.strictEqual(r.sourceLdBcAddr, 0x8000);
 	});
 
 });

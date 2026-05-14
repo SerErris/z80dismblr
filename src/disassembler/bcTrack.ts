@@ -27,6 +27,23 @@ export interface BcState {
 }
 
 
+/**
+ * Result of a BC track query.
+ *
+ *   state            — what B and C hold at the queried instruction.
+ *   sourceLdBcAddr   — address of the most recent `LD BC,nn` whose
+ *                       immediate value still equals the current BC state
+ *                       (i.e. no INC/DEC, LD B,#n, LD C,#n, etc. happened
+ *                       since). Used by P6 for operand substitution. Cleared
+ *                       on any modification that takes state away from the
+ *                       LD BC immediate.
+ */
+export interface BcResult {
+	state:          BcState;
+	sourceLdBcAddr?: number;
+}
+
+
 /** Bounds the backward walk that locates the basic-block start. */
 const MAX_WALKBACK_INSTRUCTIONS = 128;
 
@@ -46,7 +63,7 @@ export function trackBcAt(
 	memory:    Memory,
 	labels:    {has(addr: number): boolean},
 	ioAddress: number,
-): BcState {
+): BcResult {
 	// ── Step 1: Find the basic-block start by walking backwards through
 	// CODE_FIRST instruction boundaries. Stop at the first label
 	// encountered — the block starts at that label (BC unknown going in).
@@ -72,8 +89,20 @@ export function trackBcAt(
 	const state: BcState = {};
 	state.b = undefined;
 	state.c = undefined;
+	let sourceLdBcAddr: number | undefined;
 	let cursor = blockStart;
 	while (cursor < ioAddress) {
+		// Record `LD BC,nn` site BEFORE applying the effect — its address
+		// is the candidate source for operand substitution.
+		if (memory.getRawAt(cursor) === 0x01) {
+			sourceLdBcAddr = cursor;
+		}
+		else if (touchesBC(memory, cursor)) {
+			// Anything that mutates B or C invalidates the "LD BC,nn ≡ live BC"
+			// invariant — the immediate no longer equals the effective port.
+			sourceLdBcAddr = undefined;
+		}
+
 		applyOpcodeEffect(state, memory, cursor);
 
 		// If this instruction is an unconditional stop (JP, JR, RET without
@@ -84,11 +113,70 @@ export function trackBcAt(
 			const unknown: BcState = {};
 			unknown.b = undefined;
 			unknown.c = undefined;
-			return unknown;
+			return {state: unknown};
 		}
 		cursor += op.length;
 	}
-	return state;
+	return {state, sourceLdBcAddr};
+}
+
+
+/**
+ * True if the instruction at `addr` writes to B or C (or BC). Used by the
+ * source-LD-BC tracker to invalidate the substitution candidate when BC
+ * is modified after the original load.
+ */
+function touchesBC(memory: Memory, addr: number): boolean {
+	const m1 = memory.getRawAt(addr);
+	switch (m1) {
+		// LD B,#n / LD C,#n / INC B / DEC B / INC C / DEC C / INC BC / DEC BC
+		case 0x06: case 0x0E:
+		case 0x04: case 0x05: case 0x0C: case 0x0D:
+		case 0x03: case 0x0B:
+		// LD B,r (41..47, but not 40 = LD B,B which is a no-op)
+		// LD C,r (48, 4A..4F, but not 49 = LD C,C which is a no-op)
+		case 0x41: case 0x42: case 0x43: case 0x44: case 0x45: case 0x46: case 0x47:
+		case 0x48: case 0x4A: case 0x4B: case 0x4C: case 0x4D: case 0x4E: case 0x4F:
+		// POP BC / EXX
+		case 0xC1: case 0xD9:
+		// CALL / CALL cc / RST n — callee may modify BC
+		case 0xCD:
+		case 0xC4: case 0xCC: case 0xD4: case 0xDC:
+		case 0xE4: case 0xEC: case 0xF4: case 0xFC:
+		case 0xC7: case 0xCF: case 0xD7: case 0xDF:
+		case 0xE7: case 0xEF: case 0xF7: case 0xFF:
+			return true;
+
+		case 0xCB: {
+			const op2 = memory.getRawAt(addr + 1);
+			const dst = op2 & 0x07;
+			const isBit = (op2 & 0xC0) === 0x40;
+			if (isBit) return false;
+			return dst === 0 || dst === 1;   // writes to B or C
+		}
+
+		case 0xED: {
+			const op2 = memory.getRawAt(addr + 1);
+			switch (op2) {
+				case 0x4B:                                          // LD BC,(nn)
+				case 0xA0: case 0xA8: case 0xB0: case 0xB8:         // LDI / LDD / LDIR / LDDR
+				case 0xA1: case 0xA9: case 0xB1: case 0xB9:         // CPI family
+				case 0xA2: case 0xAA: case 0xB2: case 0xBA:         // INI family
+				case 0xA3: case 0xAB: case 0xB3: case 0xBB:         // OUTI family
+					return true;
+				default:
+					return false;
+			}
+		}
+
+		case 0xDD: case 0xFD: {
+			const op2 = memory.getRawAt(addr + 1);
+			return (op2 >= 0x40 && op2 <= 0x4F);
+		}
+
+		default:
+			return false;
+	}
 }
 
 
