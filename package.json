@@ -1,6 +1,6 @@
 {
   "name": "z80map",
-  "version": "3.1.2",
+  "version": "3.3.0",
   "description": "A Z80 disassembler with iterative annotation workflow, Amstrad CPC firmware support, register analysis, and clean reassembleable output.",
   "main": "./out/z80map.js",
   "scripts": {

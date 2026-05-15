@@ -1090,6 +1090,7 @@ After disassembly, writes a skeleton `--symbols` file containing only the named 
 - Subroutine entries (code labels, RST targets) receive empty structured-field placeholders
 - Data labels are emitted as plain address + name lines with no placeholders
 - Jump-target labels (`LBL`-prefix) are included without placeholders
+- Labels whose address falls **outside** the loaded binary (external RAM, firmware) are included with an `EXT` (data) or `EXTSUB` (code) prefix — rename them in the output and feed back via `--symbols` to preserve the name on subsequent runs
 - Nameless addresses are omitted
 - Entries are sorted by address ascending
 - No prose, no statistics, no auto-generated comments
@@ -1257,10 +1258,17 @@ To rename a label, simply change its name wherever it appears in the `--out` fil
 A name is treated as **auto-generated** (and therefore not preserved) if it matches any of:
 
 - `SUBnnn`, `LBLnnn`, `DATAnnn`, `SELF_MODnnn` (prefix + digits only)
+- `EXTnnn`, `EXTSUBnnn` (prefix + digits only — external-memory labels)
 - `RSTxx` (prefix + exactly two hex digits)
-- Any name starting with `.` (local label)
+- A local label matching its parent's auto pattern: `.<parent>_l[nn]` or `.<parent>_loop[nn]`
 
 Any other name — including names with mixed case, underscores, or custom prefixes — is treated as user-supplied and preserved.
+
+#### Renaming local labels
+
+Local labels (the indented `.parent_lN` / `.parent_loopN` jump targets inside a subroutine) can be renamed too. **Keep the leading dot** — it marks the label as local-scoped, keeps it indented under its parent, and prevents collisions with top-level labels. For example, rename `.vdos_init_l1` to `.check_rom_zero`; on the next run the new name is locked and used at the jump site (`jr z,.check_rom_zero`). Local renames live entirely in the `.asm` file — they are **not** written to the `--symbolsout` file.
+
+A local label whose name still matches its parent's auto pattern is left to re-number freely, so unrenamed locals keep working when the subroutine changes. If a renamed local collides with another label's name, a non-blocking warning is printed to stderr and the name is applied anyway.
 
 ---
 

@@ -95,6 +95,11 @@ export class Disassembler extends EventEmitter {
 	/// address in the current binary (orphans).
 	protected importedAddresses = new Set<number>();
 
+	/// User-authored local-label names (leading dot) read back from a
+	/// round-trip .asm file, keyed by address. Applied in assignLabelNames()
+	/// after local-label analysis so type/parent scoping stay intact.
+	protected importedLocalNames = new Map<number, string>();
+
 	/// User-supplied inline comments parsed from ';;' markers on instruction
 	/// lines (A9).  suppressAuto = true means the user omitted the leading '; '
 	/// auto-comment, so the emitter must not regenerate it.
@@ -146,6 +151,12 @@ export class Disassembler extends EventEmitter {
 	public labelLoopPrefix = "_loop";
 
 	public labelIntrptPrefix = "INTRPT";
+
+	/// Prefixes for labels whose address falls outside the loaded binary
+	/// (isEqu = true). Kept separate from the in-ROM counters so the
+	/// --symbolsout file is self-documenting.
+	public labelExtDataPrefix = "EXT";
+	public labelExtSubPrefix  = "EXTSUB";
 
 
 	/// If set the disassemble will automatically add address 0 or the SNA address to the labels.
@@ -466,6 +477,7 @@ export class Disassembler extends EventEmitter {
 		this.addressParents = new Array<DisLabel>();
 		this.addressComments = new Map<number, Comment>();
 		this.importedAddresses = new Set<number>();
+		this.importedLocalNames = new Map<number, string>();
 		this.addressInlineComments = new Map();
 		this.protectedBlocks = new Map();
 	}
@@ -633,6 +645,9 @@ export class Disassembler extends EventEmitter {
 	 * Returns all named labels for --symbolsout.
 	 * Only entries with a label name are included; nameless addresses,
 	 * auto-generated comments, and prose are all excluded.
+	 * Dedup against --symbols input relies on !isFixed (input labels are
+	 * always isFixed), NOT on !isEqu — external-memory labels (isEqu) are
+	 * intentionally included so the user can name and round-trip them.
 	 */
 	public getSymbolsData(): import('./argsWriter').SymbolEntry[] {
 		return Array.from(this.labels.entries())
@@ -642,14 +657,14 @@ export class Disassembler extends EventEmitter {
 				 label.type === NumberType.CODE_RST ||
 				 label.type === NumberType.CODE_LBL ||
 				 label.type === NumberType.DATA_LBL) &&
-				!label.isEqu &&
 				!label.isFixed)
 			.sort(([a], [b]) => a - b)
 			.map(([addr, label]) => ({
 				addr,
 				name: label.name,
 				isSub: label.type === NumberType.CODE_SUB ||
-				       label.type === NumberType.CODE_RST,
+				       label.type === NumberType.CODE_RST ||
+				       (label.isEqu && label.type === NumberType.CODE_LBL),
 			}));
 	}
 
@@ -1929,8 +1944,9 @@ export class Disassembler extends EventEmitter {
 		// Count labels ----------------
 
 		// Count all local labels.
-		const localLabels = new Map<DisLabel, Array<DisLabel>>();
-		const localLoops = new Map<DisLabel, Array<DisLabel>>();
+		type LocalChild = {addr: number; label: DisLabel};
+		const localLabels = new Map<DisLabel, Array<LocalChild>>();
+		const localLoops = new Map<DisLabel, Array<LocalChild>>();
 
 
 		// Count labels
@@ -1938,10 +1954,22 @@ export class Disassembler extends EventEmitter {
 		let labelLblCount = 0;
 		let labelDataLblCount = 0;
 		let labelSelfModifyingCount = 0;
+		let labelExtDataCount = 0;
+		let labelExtSubCount  = 0;
 
 		// Loop through all labels
 		for (const [address, label] of this.labels) {
 			const type = label.type;
+
+			// External labels (isEqu) use separate counters/prefixes.
+			if (label.isEqu) {
+				if (type === NumberType.DATA_LBL)
+					labelExtDataCount++;
+				else if (type === NumberType.CODE_SUB || type === NumberType.CODE_LBL || type === NumberType.CODE_RST)
+					labelExtSubCount++;
+				continue;
+			}
+
 			switch (type) {
 				// Count main labels
 				case NumberType.CODE_SUB:
@@ -1970,10 +1998,10 @@ export class Disassembler extends EventEmitter {
 						const arr = (type == NumberType.CODE_LOCAL_LBL) ? localLabels : localLoops;
 						let labelsArray = arr.get(parentLabel);
 						if (!labelsArray) {
-							labelsArray = new Array<DisLabel>();
+							labelsArray = new Array<LocalChild>();
 							arr.set(parentLabel, labelsArray);
 						}
-						labelsArray.push(label);
+						labelsArray.push({addr: address, label});
 					}
 					break;
 			}
@@ -1985,6 +2013,8 @@ export class Disassembler extends EventEmitter {
 		const labelLblCountDigits = Math.max(minDigits, labelLblCount.toString().length);
 		const labelDataLblCountDigits = Math.max(minDigits, labelDataLblCount.toString().length);
 		const labelSelfModifyingCountDigits = Math.max(minDigits, labelSelfModifyingCount.toString().length);
+		const labelExtDataCountDigits = Math.max(minDigits, labelExtDataCount.toString().length);
+		const labelExtSubCountDigits  = Math.max(minDigits, labelExtSubCount.toString().length);
 
 
 		// Assign names. First the main labels.
@@ -1993,12 +2023,28 @@ export class Disassembler extends EventEmitter {
 		let lblIndex = 1;	// CODE_LBL
 		let dataLblIndex = 1;	// DATA_LBL
 		let dataSelfModifyingIndex = 1;	// SELF_MOD
+		let extDataIndex = 1;	// EXT (external DATA_LBL)
+		let extSubIndex  = 1;	// EXTSUB (external code)
 
 		// Loop through all labels (labels is sorted by address)
 		for (const [address, label] of this.labels) {
 			// Check if label was already set (e.g. from commandline)
 			if (label.name)
 				continue;
+
+			// External labels (isEqu) get their own prefix/counter so the
+			// --symbolsout file visually separates in-ROM from external-RAM.
+			if (label.isEqu) {
+				const type = label.type;
+				if (type === NumberType.DATA_LBL) {
+					label.name = this.labelExtDataPrefix + this.getIndex(extDataIndex, labelExtDataCountDigits);
+					extDataIndex++;
+				} else if (type === NumberType.CODE_SUB || type === NumberType.CODE_LBL || type === NumberType.CODE_RST) {
+					label.name = this.labelExtSubPrefix + this.getIndex(extSubIndex, labelExtSubCountDigits);
+					extSubIndex++;
+				}
+				continue;
+			}
 
 			// Process label
 			const type = label.type;
@@ -2049,14 +2095,16 @@ export class Disassembler extends EventEmitter {
 			const localPrefix = parentLabel.name.toLowerCase();
 			const count = childLabels.length;
 			const digitCount = count.toString().length;
+			const autoRe = this.autoLocalNameRegExp(localPrefix);
 			// Set names
 			let index = 1;
-			for (let child of childLabels) {
+			for (let {addr, label: child} of childLabels) {
 				const indexString = this.getIndex(index, digitCount);
 				child.name = '.' + localPrefix + this.labelLocalLabelPrefix;
 				if (count > 1)
 					child.name += indexString;
 				index++;
+				this.applyImportedLocalName(addr, child, autoRe);
 			}
 		}
 		// Local Loops:
@@ -2064,14 +2112,80 @@ export class Disassembler extends EventEmitter {
 			const localPrefix = parentLabel.name.toLowerCase();
 			const count = childLabels.length;
 			const digitCount = count.toString().length;
+			const autoRe = this.autoLocalNameRegExp(localPrefix);
 			// Set names
 			let index = 1;
-			for (let child of childLabels) {
+			for (let {addr, label: child} of childLabels) {
 				const indexString = this.getIndex(index, digitCount);
 				child.name = '.' + localPrefix + this.labelLoopPrefix;
 				if (count > 1)
 					child.name += indexString;
 				index++;
+				this.applyImportedLocalName(addr, child, autoRe);
+			}
+		}
+
+		this.warnLocalNameCollisions();
+	}
+
+
+	/**
+	 * Builds the regexp that matches an auto-generated local label name for a
+	 * given (lowercased) parent prefix, e.g. /^\.vdos_init(_l|_loop)\d*$/.
+	 * A round-trip name that matches this is a stale auto name (not a user
+	 * rename) and must be left to re-number freely.
+	 */
+	private autoLocalNameRegExp(localPrefix: string): RegExp {
+		const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+		return new RegExp(
+			'^\\.' + esc(localPrefix) +
+			'(' + esc(this.labelLocalLabelPrefix) + '|' + esc(this.labelLoopPrefix) + ')' +
+			'\\d*$');
+	}
+
+
+	/**
+	 * If the user renamed this local label in a round-trip .asm file, lock in
+	 * their name. A name that still matches the auto-generated pattern is
+	 * ignored so re-numbering keeps working when the subroutine changes.
+	 */
+	private applyImportedLocalName(addr: number, child: DisLabel, autoRe: RegExp): void {
+		if (child.isFixed)
+			return;
+		const imported = this.importedLocalNames.get(addr);
+		if (imported === undefined || autoRe.test(imported))
+			return;
+		child.name = imported;
+		child.isFixed = true;
+	}
+
+
+	/**
+	 * Emits a non-blocking warning for every user-renamed local label whose
+	 * name duplicates another label's final name (top-level or local).
+	 */
+	private warnLocalNameCollisions(): void {
+		const nameAddrs = new Map<string, number[]>();
+		for (const [addr, label] of this.labels) {
+			if (!label.name)
+				continue;
+			const arr = nameAddrs.get(label.name);
+			if (arr) arr.push(addr);
+			else nameAddrs.set(label.name, [addr]);
+		}
+		for (const [addr] of this.importedLocalNames) {
+			const lbl = this.labels.get(addr);
+			if (!lbl || !lbl.isFixed || !lbl.name)
+				continue;
+			const others = (nameAddrs.get(lbl.name) ?? []).filter(a => a !== addr);
+			if (others.length > 0) {
+				const where = others
+					.map(a => '$' + Format.getHexString(a, 4))
+					.join(', ');
+				console.error(
+					'warning: local ' + lbl.name + ' at $' +
+					Format.getHexString(addr, 4) +
+					' collides with ' + where + ' — using anyway');
 			}
 		}
 	}
@@ -2584,7 +2698,15 @@ export class Disassembler extends EventEmitter {
 					} else if (ev.kind === 'label') {
 						this.importedAddresses.add(ev.address);
 						flushPendingComments(ev.address);
-						this.applyFixedLabelIfRenamed(ev.address, ev.name);
+						if (ev.name.startsWith('.')) {
+							// Local label. Don't create a fixed DATA_LBL here —
+							// record the user name and re-apply it in
+							// assignLabelNames() once local-label analysis has
+							// run, so type and parent scoping stay intact.
+							this.importedLocalNames.set(ev.address, ev.name);
+						} else {
+							this.applyFixedLabelIfRenamed(ev.address, ev.name);
+						}
 						if (pendingTypeSub) {
 							const lbl = this.labels.get(ev.address);
 							if (lbl && lbl.type < NumberType.CODE_SUB)
@@ -2805,7 +2927,9 @@ export class Disassembler extends EventEmitter {
 	 * carries no user intent.  Any other name is considered user-authored.
 	 */
 	private isAutoGeneratedName(name: string): boolean {
-		// Local labels (.sub001_l5 etc.) are always auto-generated.
+		// Dotted local labels never reach this path — they are intercepted in
+		// applyAsmEventStream and re-applied via importedLocalNames in
+		// assignLabelNames(). Kept as a defensive guard only.
 		if (name.startsWith('.'))
 			return true;
 		const hasDigitSuffix = (prefix: string) =>
@@ -2817,6 +2941,8 @@ export class Disassembler extends EventEmitter {
 			|| hasDigitSuffix(this.labelLblPrefix)
 			|| hasDigitSuffix(this.labelDataLblPrefix)
 			|| hasDigitSuffix(this.labelSelfModifyingPrefix)
+			|| hasDigitSuffix(this.labelExtDataPrefix)
+			|| hasDigitSuffix(this.labelExtSubPrefix)
 			|| name === this.labelIntrptPrefix
 			|| isRst;
 	}

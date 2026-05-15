@@ -456,7 +456,10 @@ z80map [options]
             present in any --symbols input file. Empty structured-field
             placeholders are emitted for subroutines. No prose comments are
             emitted. The output can be appended directly to your --symbols
-            file without creating duplicates.
+            file without creating duplicates. Labels whose address falls
+            outside the loaded binary (external RAM or firmware) are included
+            with an EXT / EXTSUB prefix so they can be renamed and round-
+            tripped via the --symbols file.
             Example: --symbolsout discovered.sym
     `);
     }
