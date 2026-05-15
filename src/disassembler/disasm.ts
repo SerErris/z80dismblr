@@ -1692,8 +1692,21 @@ export class Disassembler extends EventEmitter {
 			// Check if parent already assigned
 			const memLabel = this.addressParents[address];
 			if (memLabel) {
-				DelayedLog.log(() => 'setSubroutineParent: address=' + DelayedLog.getNumber(address) + ': returns. memory already checked.');
-				break;	// already checked
+				if (memLabel !== parentLabel) {
+					DelayedLog.log(() => 'setSubroutineParent: address=' + DelayedLog.getNumber(address) + ': returns. owned by another subroutine.');
+					break;	// reached code owned by a different subroutine — stop
+				}
+				// Already attributed to this same subroutine by an earlier
+				// branch recursion. Don't re-process or re-recurse, but keep
+				// walking forward so addresses *after* this point are still
+				// attributed to this parent (otherwise a gap is left that a
+				// later, higher-numbered subroutine would wrongly claim,
+				// producing local labels with the wrong parent prefix).
+				DelayedLog.log(() => 'setSubroutineParent: address=' + DelayedLog.getNumber(address) + ': already ours, skipping forward.');
+				const seenOpcode = Opcode.getOpcodeAt(this.memory, address);
+				opcodeClone = {...seenOpcode};
+				address += opcodeClone.length;
+				continue;	// re-evaluates while(!(opcodeClone.flags & STOP))
 			}
 
 			// Check if label is sub routine
