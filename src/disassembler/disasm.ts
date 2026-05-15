@@ -141,6 +141,11 @@ export class Disassembler extends EventEmitter {
 	/// Choose to add the opcode bytes also, e.g. "CB 01" for "RLC C"
 	public addOpcodeBytes = true;
 
+	/// Byte-column rendering mode (see --bytes). 'raw' = bytes as stored in
+	/// memory (default, == legacy --addbytes). 'decoded' = M1 bytes raw,
+	/// operand bytes through the memory decoder. 'both' = "raw | decoded".
+	public bytesMode: 'raw' | 'decoded' | 'both' = 'raw';
+
 	/// Label prefixes
 	public labelSubPrefix = "SUB";
 	public labelLblPrefix = "LBL";
@@ -3634,7 +3639,7 @@ export class Disassembler extends EventEmitter {
 	 */
 	protected formatDisassembly(address: number, size: number, mainString: string): string {
 		const memory = (this.addOpcodeBytes) ? this.memory : undefined;
-		return Format.formatDisassembly(memory, this.opcodesLowerCase, this.clmnsAddress, this.clmnsBytes, this.clmnsOpcodeFirstPart, this.clmsnOpcodeTotal, address, size, mainString);
+		return Format.formatDisassembly(memory, this.opcodesLowerCase, this.clmnsAddress, this.clmnsBytes, this.clmnsOpcodeFirstPart, this.clmsnOpcodeTotal, address, size, mainString, this.bytesMode);
 	}
 
 

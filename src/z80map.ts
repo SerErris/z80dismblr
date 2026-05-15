@@ -295,6 +295,19 @@ z80map [options]
         --clmnsopcodetotal value: The size of the complete opcode, e.g. 'LD  A,(HL)'.
         --uppercase: Use upper case for the opcodes, e.g. 'ld a,(hl)'.
         --addbytes: Print also the byte values of the opcodes (the opcode bytes).
+            Legacy alias for '--bytes raw'.
+        --bytes mode: Print the opcode byte column in the given mode. Implies
+            --addbytes. Modes:
+                raw     — bytes as physically stored in memory (ROM image).
+                          This is the default and matches --addbytes.
+                decoded — what the program effectively sees: M1 (opcode and
+                          prefix) bytes raw, operand/data bytes passed through
+                          the memory decoder (see --decoder). Identical to raw
+                          when no decoder is installed.
+                both    — "raw | decoded" side by side. Useful with
+                          --decoder vortex to eyeball the transform. The column
+                          is roughly twice as wide; raise --clmnsbytes if it
+                          overlaps the opcode field.
         --hexformat style: Select the output style for all hex literals in the
             disassembly (operands, directives, comments). Default is 'intel'.
             Styles:
@@ -835,10 +848,21 @@ z80map [options]
                     }
                     break;
 
-                // print also ocode byte values
+                // print also ocode byte values (legacy alias for --bytes raw)
                 case '--addbytes':
                     this.dasm.addOpcodeBytes = true;
+                    this.dasm.bytesMode = 'raw';
                     break;
+
+                // byte-column mode: raw | decoded | both
+                case '--bytes': {
+                    const mode = args.shift();
+                    if (mode !== 'raw' && mode !== 'decoded' && mode !== 'both')
+                        throw new Error("--bytes: expected 'raw', 'decoded' or 'both', got '" + mode + "'");
+                    this.dasm.addOpcodeBytes = true;
+                    this.dasm.bytesMode = mode;
+                    break;
+                }
 
 
                 // DOT:

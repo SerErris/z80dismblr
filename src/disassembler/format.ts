@@ -156,7 +156,41 @@ export class Format {
 	 * @param size The size of the opcode. Only used to display the opcode byte values and only used if memory is defined.
 	 * @param mainString The opcode string, e.g. "LD HL,35152"
 	 */
-	public static formatDisassembly(memory: BaseMemory | undefined, opcodesLowerCase: boolean, clmnsAddress: number, clmnsBytes: number, clmnsOpcodeFirstPart: number, clmsnOpcodeTotal: number, address: number, size: number, mainString: string): string {
+	/**
+	 * Classifies each byte of an instruction as an M1 (opcode/prefix) byte
+	 * or a non-M1 (operand/data) byte, mirroring exactly what Opcode.
+	 * getOpcodeAt() does: M1 bytes are read raw (getRawAt), operand bytes
+	 * pass through the memory decoder (getValueAt). The split depends on the
+	 * Z80 prefix structure:
+	 *   - unprefixed:        [op][operands…]        → offset 0 raw
+	 *   - CB:                [CB][op]               → offsets 0,1 raw
+	 *   - ED:                [ED][op][operands…]    → offsets 0,1 raw
+	 *   - DD/FD:             [pfx][op][operands…]   → offsets 0,1 raw
+	 *   - DDCB/FDCB:         [pfx][CB][d][op]       → offsets 0,1 raw,
+	 *                        offsets 2,3 decoded (displacement and the
+	 *                        post-displacement selector are non-M1 reads).
+	 * @returns boolean[] of length `size`; true = raw/M1, false = decoded.
+	 */
+	private static classifyInstrBytes(memory: BaseMemory, address: number, size: number): boolean[] {
+		const isRaw = new Array<boolean>(size).fill(false);
+		if (size <= 0)
+			return isRaw;
+		isRaw[0] = true;	// the first byte is always an M1 fetch
+		const b0 = memory.getRawAt(address);
+		if (b0 === 0xCB || b0 === 0xED) {
+			if (size > 1) isRaw[1] = true;
+		}
+		else if (b0 === 0xDD || b0 === 0xFD) {
+			if (size > 1) isRaw[1] = true;
+			// DDCB/FDCB: [DD|FD][CB][d][op] — only the two prefix bytes are
+			// M1; the displacement and selector are non-M1 (decoded).
+			// (Already covered: offsets 0,1 raw, rest decoded.)
+		}
+		return isRaw;
+	}
+
+
+	public static formatDisassembly(memory: BaseMemory | undefined, opcodesLowerCase: boolean, clmnsAddress: number, clmnsBytes: number, clmnsOpcodeFirstPart: number, clmsnOpcodeTotal: number, address: number, size: number, mainString: string, bytesMode: 'raw' | 'decoded' | 'both' = 'raw'): string {
 		let line = '';
 
 		// Add address field?
@@ -164,15 +198,37 @@ export class Format {
 			line = Format.addSpaces(Format.getHexString(address) + ' ', clmnsAddress);
 		}
 
-		// Add bytes of opcode?  Show the raw (undecoded) bytes that are
-		// physically stored in memory — the hex-dump column reflects ROM
-		// content, not the program-visible decoded values.
+		// Add bytes of opcode.  'raw' shows the bytes physically stored in
+		// memory (ROM image).  'decoded' shows what the program effectively
+		// sees: M1 (opcode/prefix) bytes raw, operand/data bytes passed
+		// through the memory decoder.  'both' shows "raw | decoded".
 		let bytesString = '';
 		if (memory) {
-			for (let i = 0; i < size; i++) {
-				const memVal = memory.getRawAt(address + i);
-				bytesString += Format.getHexString(memVal, 2) + ' ';
-			}
+			const isRaw = (bytesMode === 'raw')
+				? undefined
+				: Format.classifyInstrBytes(memory, address, size);
+			const rawGroup = (): string => {
+				let s = '';
+				for (let i = 0; i < size; i++)
+					s += Format.getHexString(memory.getRawAt(address + i), 2) + ' ';
+				return s;
+			};
+			const decodedGroup = (): string => {
+				let s = '';
+				for (let i = 0; i < size; i++) {
+					const v = isRaw![i]
+						? memory.getRawAt(address + i)
+						: memory.getValueAt(address + i);
+					s += Format.getHexString(v, 2) + ' ';
+				}
+				return s;
+			};
+			if (bytesMode === 'raw')
+				bytesString = rawGroup();
+			else if (bytesMode === 'decoded')
+				bytesString = decodedGroup();
+			else
+				bytesString = rawGroup().trimEnd() + ' | ' + decodedGroup();
 		}
 		line += Format.addSpaces(bytesString, clmnsBytes);
 
