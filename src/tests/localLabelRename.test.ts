@@ -185,4 +185,37 @@ suite('Part 1 — local-label rename round-trip', () => {
         assert.ok((pass2.match(/\.dup:/g) ?? []).length === 2,
             'both colliding locals are still applied (warn-but-accept)');
     });
+
+
+    test('a stale auto name from a different parent number is re-numbered, not frozen', function () {
+        if (typeof (new Disassembler() as any).setAddressCommentsFromAsm !== 'function')
+            return this.skip();
+
+        const dasm1 = makeDasm();
+        const pass1 = disassemble(dasm1);
+        const autoName = findLocalNames(pass1)[0];   // e.g. ".sub002_l"
+        assert.ok(/^\.\w*sub\d+\w*$/i.test(autoName),
+            'precondition: auto local carries an auto SUB parent prefix, got ' + autoName);
+
+        // Simulate the .asm produced by an earlier run whose parent carried
+        // a DIFFERENT auto number (numbering shifted / parent re-attributed).
+        // The leading dot is kept, only the parent's number changes.
+        const stale = autoName.replace(/sub0*\d+/i, 'sub999');
+        assert.notStrictEqual(stale, autoName,
+            'test setup: stale name must differ from the current auto name');
+        const edited = pass1.split(autoName).join(stale);
+        const asmPath = join(tmpDir, 'stale.asm');
+        writeFileSync(asmPath, edited + '\n');
+
+        const dasm2 = makeDasm();
+        dasm2.setAddressCommentsFromAsm(asmPath);
+        const pass2 = disassemble(dasm2);
+
+        assert.ok(!pass2.includes('sub999'),
+            'a stale auto name (wrong parent number) must NOT be frozen as a '
+            + 'user rename:\n' + pass2);
+        const reAuto = findLocalNames(pass2)[0];
+        assert.ok(/^\.\w*sub\d+\w*$/i.test(reAuto) && !reAuto.includes('999'),
+            'the local must re-number under its real current parent, got ' + reAuto);
+    });
 });

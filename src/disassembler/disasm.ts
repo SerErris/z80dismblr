@@ -2158,6 +2158,37 @@ export class Disassembler extends EventEmitter {
 
 
 	/**
+	 * Matches an auto-generated local name for ANY auto-named parent prefix,
+	 * e.g. `.sub006_loop`, `.lbl012_l3`, `.rst08_loop2`. Unlike
+	 * autoLocalNameRegExp() (which is bound to the current parent's name),
+	 * this recognises a stale auto name produced by a *previous* run whose
+	 * parent carried a different auto number — which happens whenever
+	 * subroutine numbering shifts (subs added/removed/reordered, or parent
+	 * re-attribution). Such names carry no user intent and must be left to
+	 * re-number, not frozen as a user rename.
+	 *
+	 * Note: this only covers auto-named parents (SUB/LBL/RST/INTRPT/EXTSUB).
+	 * Auto locals under a *user-named* parent (e.g. `.vdos_init_l1`) are
+	 * handled by the parent-specific autoLocalNameRegExp().
+	 */
+	private isAutoLocalName(name: string): boolean {
+		const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+		const sub  = esc(this.labelSubPrefix.toLowerCase());
+		const lbl  = esc(this.labelLblPrefix.toLowerCase());
+		const rst  = esc(this.labelRstPrefix.toLowerCase());
+		const intr = esc(this.labelIntrptPrefix.toLowerCase());
+		const exts = esc(this.labelExtSubPrefix.toLowerCase());
+		const ll   = esc(this.labelLocalLabelPrefix);
+		const lp   = esc(this.labelLoopPrefix);
+		const parent = '(?:' + sub + '\\d+|' + lbl + '\\d+|' + exts + '\\d+|'
+			+ rst + '[0-9a-f]{2}|' + intr + ')';
+		// Longer suffix first so `_loop` is not shadowed by `_l`.
+		const re = new RegExp('^\\.' + parent + '(?:' + lp + '|' + ll + ')\\d*$');
+		return re.test(name);
+	}
+
+
+	/**
 	 * If the user renamed this local label in a round-trip .asm file, lock in
 	 * their name. A name that still matches the auto-generated pattern is
 	 * ignored so re-numbering keeps working when the subroutine changes.
@@ -2166,7 +2197,9 @@ export class Disassembler extends EventEmitter {
 		if (child.isFixed)
 			return;
 		const imported = this.importedLocalNames.get(addr);
-		if (imported === undefined || autoRe.test(imported))
+		if (imported === undefined
+			|| autoRe.test(imported)
+			|| this.isAutoLocalName(imported))
 			return;
 		child.name = imported;
 		child.isFixed = true;
