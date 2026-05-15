@@ -509,6 +509,9 @@ suite('Disassembler', () => {
 			label = dasm.labels.get(0x6009);
 			assert(label.name == '.bsub001_lbl3');
 
+			// 0x6015 and 0x6018 are CALL targets, but every caller is inside
+			// the enclosing routine's address block, so they are internal
+			// calls and become locals (a CALL to an indented local label).
 			label = dasm.labels.get(0x6015);
 			assert(label.name == '.bsub001_lbl4');
 
